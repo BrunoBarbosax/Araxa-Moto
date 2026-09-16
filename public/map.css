@@ -1,0 +1,24 @@
+.map {
+  height: 330px;
+  background: #e7edf5;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.map::after { display: none; }
+
+.route-summary {
+  background: #eef4ff;
+  border: 1px solid #d5e2ff;
+  border-radius: 14px;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.route-summary strong {
+  display: block;
+  font-size: 18px;
+}
+
+.leaflet-control-attribution { font-size: 10px; }
