@@ -1,0 +1,9 @@
+node_modules
+android
+ios
+.github
+.git
+data.json
+data.json.tmp
+*.zip
+npm-debug.log

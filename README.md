@@ -12,6 +12,10 @@ npm start
 
 Abra `http://localhost:3000`. Os três botões iniciais entram em perfis demonstrativos. Para testar o fluxo completo, abra o cliente e o mototaxista em navegadores ou perfis diferentes.
 
+## Render com Docker
+
+O `Dockerfile` da raiz inicia o servidor Node.js e utiliza automaticamente a variável `PORT` fornecida pelo Render. No serviço Render configurado como Docker, mantenha o campo Dockerfile como `./Dockerfile`.
+
 ## Testes
 
 ```bash
