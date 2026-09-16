@@ -18,6 +18,8 @@ Abra `http://localhost:3000`. Os três botões iniciais entram em perfis demonst
 
 O `Dockerfile` da raiz inicia o servidor Node.js e utiliza automaticamente a variável `PORT` fornecida pelo Render. No serviço Render configurado como Docker, mantenha o campo Dockerfile como `./Dockerfile`.
 
+No Render, abra **Environment** e crie as variáveis secretas `ADMIN_USERNAME` e `ADMIN_PASSWORD`. Não coloque a senha administrativa no GitHub ou no código-fonte.
+
 ## Testes
 
 ```bash

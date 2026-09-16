@@ -14,7 +14,7 @@ const seed = () => ({
   users: [
     { id:'passenger-demo', role:'passenger', name:'Cliente Demonstração', phone:'34999990001', token:'passageiro-demo' },
     { id:'driver-demo', role:'driver', name:'Carlos Mototáxi', phone:'34999990002', token:'motorista-demo', approved:true, online:false, balance:30, plate:'ABC1D23', rating:4.9, dailyFeeDate:null },
-    { id:'admin-demo', role:'admin', name:'Administrador', phone:'34999990003', token:'admin-demo' }
+    { id:'admin-main', role:'admin', name:'Administrador', phone:'', token:crypto.randomBytes(24).toString('hex') }
   ],
   rides: [],
   transactions: [],
@@ -22,7 +22,7 @@ const seed = () => ({
 });
 
 function loadDB() {
-  try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); }
+  try { const db=JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));const admin=db.users&&db.users.find(u=>u.role==='admin');if(admin&&admin.token==='admin-demo'){admin.token=crypto.randomBytes(24).toString('hex');saveDB(db)}return db; }
   catch { const db=seed(); saveDB(db); return db; }
 }
 function saveDB(db) {
@@ -47,6 +47,7 @@ function publicUser(u) { const {token,...safe}=u; return safe; }
 function safeUser(u) { const {token,passwordHash,passwordSalt,documents,...safe}=u; return safe; }
 function normalizePhone(value) { return String(value||'').replace(/\D/g,''); }
 function passwordDigest(password,salt) { return crypto.scryptSync(String(password),salt,32).toString('hex'); }
+function secureEqual(a,b) { const left=crypto.createHash('sha256').update(String(a)).digest();const right=crypto.createHash('sha256').update(String(b)).digest();return crypto.timingSafeEqual(left,right); }
 function ageFrom(date) { const born=new Date(`${date}T12:00:00`); if(Number.isNaN(born.getTime()))return 0; const now=new Date();let age=now.getFullYear()-born.getFullYear();if(now.getMonth()<born.getMonth()||(now.getMonth()===born.getMonth()&&now.getDate()<born.getDate()))age--;return age; }
 function estimate(settings, km) { return Math.max(settings.minimumFare, settings.baseFare + Number(km||0)*settings.perKm); }
 
@@ -79,6 +80,12 @@ async function calculateRoute(origin,destination,originCoords) {
 
 async function api(req,res,url) {
   const db=loadDB();
+  if(req.method==='POST' && url.pathname==='/api/admin-login') {
+    const data=await body(req);const expectedUser=process.env.ADMIN_USERNAME;const expectedPassword=process.env.ADMIN_PASSWORD;
+    if(!expectedUser||!expectedPassword)return json(res,503,{error:'Acesso administrativo ainda não configurado no servidor'});
+    if(!secureEqual(data.username||'',expectedUser)||!secureEqual(data.password||'',expectedPassword))return json(res,401,{error:'Usuário ou senha administrativa incorretos'});
+    const admin=db.users.find(u=>u.role==='admin');if(!admin)return json(res,500,{error:'Administrador não encontrado'});admin.token=crypto.randomBytes(24).toString('hex');saveDB(db);return json(res,200,{token:admin.token,user:safeUser(admin)});
+  }
   if(req.method==='POST' && url.pathname==='/api/register') {
     const data=await body(req); const role=data.role==='driver'?'driver':'passenger'; const phone=normalizePhone(data.phone);
     if(String(data.name||'').trim().length<3)return json(res,400,{error:'Informe seu nome completo'});
@@ -103,6 +110,7 @@ async function api(req,res,url) {
   }
   if(req.method==='POST' && url.pathname==='/api/demo-login') {
     const data=await body(req); const user=db.users.find(u=>u.role===data.role);
+    if(data.role==='admin')return json(res,403,{error:'Use o acesso administrativo protegido'});
     return user ? json(res,200,{token:user.token,user:publicUser(user)}) : json(res,404,{error:'Perfil não encontrado'});
   }
   const user=auth(req,db);
