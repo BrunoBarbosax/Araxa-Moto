@@ -1,0 +1,16 @@
+{
+	"appId": "br.com.araxamoto.app",
+	"appName": "Araxá Moto",
+	"webDir": "public",
+	"server": {
+		"url": "https://araxa-moto.onrender.com",
+		"cleartext": false
+	},
+	"android": {
+		"allowMixedContent": false
+	},
+	"ios": {
+		"contentInset": "automatic"
+	},
+	"packageClassList": []
+}
