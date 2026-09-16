@@ -35,7 +35,7 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 function body(req) {
-  return new Promise((resolve,reject)=>{ let raw=''; req.on('data',c=>{raw+=c; if(raw.length>1e6) reject(new Error('too_large'));}); req.on('end',()=>{try{resolve(raw?JSON.parse(raw):{});}catch{reject(new Error('invalid_json'));}}); req.on('error',reject); });
+  return new Promise((resolve,reject)=>{ let raw=''; req.on('data',c=>{raw+=c; if(raw.length>8e6) reject(new Error('too_large'));}); req.on('end',()=>{try{resolve(raw?JSON.parse(raw):{});}catch{reject(new Error('invalid_json'));}}); req.on('error',reject); });
 }
 function auth(req, db) {
   const token = (req.headers.authorization||'').replace(/^Bearer\s+/i,'');
@@ -44,6 +44,10 @@ function auth(req, db) {
 function today() { return new Date().toISOString().slice(0,10); }
 function id(prefix) { return `${prefix}_${crypto.randomUUID().slice(0,8)}`; }
 function publicUser(u) { const {token,...safe}=u; return safe; }
+function safeUser(u) { const {token,passwordHash,passwordSalt,documents,...safe}=u; return safe; }
+function normalizePhone(value) { return String(value||'').replace(/\D/g,''); }
+function passwordDigest(password,salt) { return crypto.scryptSync(String(password),salt,32).toString('hex'); }
+function ageFrom(date) { const born=new Date(`${date}T12:00:00`); if(Number.isNaN(born.getTime()))return 0; const now=new Date();let age=now.getFullYear()-born.getFullYear();if(now.getMonth()<born.getMonth()||(now.getMonth()===born.getMonth()&&now.getDate()<born.getDate()))age--;return age; }
 function estimate(settings, km) { return Math.max(settings.minimumFare, settings.baseFare + Number(km||0)*settings.perKm); }
 
 const geoCache = new Map();
@@ -75,13 +79,35 @@ async function calculateRoute(origin,destination,originCoords) {
 
 async function api(req,res,url) {
   const db=loadDB();
+  if(req.method==='POST' && url.pathname==='/api/register') {
+    const data=await body(req); const role=data.role==='driver'?'driver':'passenger'; const phone=normalizePhone(data.phone);
+    if(String(data.name||'').trim().length<3)return json(res,400,{error:'Informe seu nome completo'});
+    if(phone.length<10||phone.length>13)return json(res,400,{error:'Telefone inválido'});
+    if(String(data.password||'').length<6)return json(res,400,{error:'A senha precisa ter pelo menos 6 caracteres'});
+    if(db.users.some(u=>normalizePhone(u.phone)===phone))return json(res,409,{error:'Este telefone já está cadastrado'});
+    if(role==='driver') {
+      if(ageFrom(data.birthDate)<21)return json(res,400,{error:'O cadastro de mototaxista exige idade mínima de 21 anos'});
+      if(!String(data.cnhCategory||'').toUpperCase().includes('A'))return json(res,400,{error:'A CNH precisa incluir a categoria A'});
+      if(!data.cnhNumber||!data.cnhExpiry||!data.plate||!data.motorcycleModel)return json(res,400,{error:'Preencha CNH e dados da motocicleta'});
+      if(!Array.isArray(data.documents)||data.documents.length<3)return json(res,400,{error:'Envie CNH, documento da moto e foto de perfil'});
+      if(data.documents.some(d=>String(d.data||'').length>2200000))return json(res,413,{error:'Cada documento deve ter no máximo 1,5 MB'});
+    }
+    const salt=crypto.randomBytes(16).toString('hex'); const user={id:id(role),role,name:String(data.name).trim().slice(0,100),phone,passwordSalt:salt,passwordHash:passwordDigest(data.password,salt),token:crypto.randomBytes(24).toString('hex'),createdAt:new Date().toISOString()};
+    if(role==='driver')Object.assign(user,{approved:false,reviewStatus:'pending',reviewNote:'',online:false,balance:0,rating:5,dailyFeeDate:null,birthDate:data.birthDate,cnhNumber:String(data.cnhNumber).slice(0,30),cnhCategory:String(data.cnhCategory).toUpperCase().slice(0,5),cnhExpiry:data.cnhExpiry,plate:String(data.plate).toUpperCase().slice(0,10),motorcycleModel:String(data.motorcycleModel).slice(0,80),motorcycleYear:String(data.motorcycleYear||'').slice(0,4),motorcycleColor:String(data.motorcycleColor||'').slice(0,30),pixKey:String(data.pixKey||'').slice(0,100),documents:data.documents.map(d=>({kind:String(d.kind).slice(0,30),name:String(d.name).slice(0,100),type:String(d.type).slice(0,60),data:String(d.data)}))});
+    db.users.push(user);saveDB(db);return json(res,201,{token:user.token,user:safeUser(user)});
+  }
+  if(req.method==='POST' && url.pathname==='/api/login') {
+    const data=await body(req);const phone=normalizePhone(data.phone);const user=db.users.find(u=>normalizePhone(u.phone)===phone&&u.passwordHash);
+    if(!user||passwordDigest(data.password||'',user.passwordSalt)!==user.passwordHash)return json(res,401,{error:'Telefone ou senha incorretos'});
+    user.token=crypto.randomBytes(24).toString('hex');saveDB(db);return json(res,200,{token:user.token,user:safeUser(user)});
+  }
   if(req.method==='POST' && url.pathname==='/api/demo-login') {
     const data=await body(req); const user=db.users.find(u=>u.role===data.role);
     return user ? json(res,200,{token:user.token,user:publicUser(user)}) : json(res,404,{error:'Perfil não encontrado'});
   }
   const user=auth(req,db);
   if(!user) return json(res,401,{error:'Sessão inválida'});
-  if(req.method==='GET' && url.pathname==='/api/me') return json(res,200,{user:publicUser(user),settings:db.settings});
+  if(req.method==='GET' && url.pathname==='/api/me') return json(res,200,{user:safeUser(user),settings:db.settings});
   if(req.method==='POST' && url.pathname==='/api/route') {
     const data=await body(req);
     if(!data.destination||(!data.origin&&!data.originCoords)) return json(res,400,{error:'Informe origem e destino'});
@@ -138,17 +164,26 @@ async function api(req,res,url) {
       user.balance=Number((user.balance-db.settings.dailyFee).toFixed(2)); user.dailyFeeDate=today();
       db.transactions.push({id:id('tx'),driverId:user.id,type:'daily_fee',amount:-db.settings.dailyFee,createdAt:new Date().toISOString()});
     }
-    user.online=!user.online; saveDB(db); return json(res,200,{user:publicUser(user)});
+    user.online=!user.online; saveDB(db); return json(res,200,{user:safeUser(user)});
   }
   if(req.method==='POST'&&url.pathname==='/api/driver/recharge') {
     if(user.role!=='driver')return json(res,403,{error:'Perfil inválido'}); const data=await body(req); const amount=Number(data.amount);
     if(!Number.isFinite(amount)||amount<=0||amount>1000)return json(res,400,{error:'Valor inválido'});
-    user.balance=Number((user.balance+amount).toFixed(2)); db.transactions.push({id:id('tx'),driverId:user.id,type:'recharge_demo',amount,createdAt:new Date().toISOString()}); saveDB(db); return json(res,200,{user:publicUser(user)});
+    user.balance=Number((user.balance+amount).toFixed(2)); db.transactions.push({id:id('tx'),driverId:user.id,type:'recharge_demo',amount,createdAt:new Date().toISOString()}); saveDB(db); return json(res,200,{user:safeUser(user)});
   }
   if(req.method==='GET'&&url.pathname==='/api/admin/summary') {
     if(user.role!=='admin')return json(res,403,{error:'Acesso administrativo'});
     const revenue=db.transactions.filter(t=>t.amount<0).reduce((s,t)=>s-t.amount,0);
-    return json(res,200,{users:db.users.map(publicUser),rides:db.rides,transactions:db.transactions,summary:{drivers:db.users.filter(u=>u.role==='driver').length,active:db.rides.filter(r=>!['completed','cancelled'].includes(r.status)).length,completed:db.rides.filter(r=>r.status==='completed').length,revenue:Number(revenue.toFixed(2))},settings:db.settings});
+    return json(res,200,{users:db.users.map(safeUser),rides:db.rides,transactions:db.transactions,summary:{drivers:db.users.filter(u=>u.role==='driver').length,active:db.rides.filter(r=>!['completed','cancelled'].includes(r.status)).length,completed:db.rides.filter(r=>r.status==='completed').length,revenue:Number(revenue.toFixed(2))},settings:db.settings});
+  }
+  if(req.method==='GET'&&url.pathname==='/api/admin/drivers') {
+    if(user.role!=='admin')return json(res,403,{error:'Acesso administrativo'});
+    return json(res,200,{drivers:db.users.filter(u=>u.role==='driver').map(u=>({...safeUser(u),documents:(u.documents||[]).map(d=>({kind:d.kind,name:d.name,type:d.type,preview:d.data}))}))});
+  }
+  const review=url.pathname.match(/^\/api\/admin\/drivers\/([^/]+)\/(approve|reject)$/);
+  if(req.method==='POST'&&review) {
+    if(user.role!=='admin')return json(res,403,{error:'Acesso administrativo'});const driver=db.users.find(u=>u.id===review[1]&&u.role==='driver');if(!driver)return json(res,404,{error:'Mototaxista não encontrado'});const data=await body(req);
+    driver.approved=review[2]==='approve';driver.reviewStatus=driver.approved?'approved':'rejected';driver.reviewNote=String(data.note||'').slice(0,240);driver.reviewedAt=new Date().toISOString();saveDB(db);return json(res,200,{driver:safeUser(driver)});
   }
   return json(res,404,{error:'Rota não encontrada'});
 }

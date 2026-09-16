@@ -1,6 +1,8 @@
 # Araxá Moto
 
-MVP instalável para corridas de mototáxi e entregas. Inclui perfis de cliente, mototaxista e administrador; mapa OpenStreetMap; rota, distância e preço automáticos; carteira; diária de R$ 6; comissão de 8%; e painel operacional.
+MVP instalável para corridas de mototáxi e entregas. Inclui cadastro de passageiros, cadastro e análise documental de mototaxistas, mapa OpenStreetMap, rota, distância e preço automáticos, carteira, diária de R$ 6, comissão de 8% e painel operacional.
+
+> Segurança: a hospedagem demonstrativa ainda usa armazenamento local temporário. Não cadastre CNH ou documentos reais até a migração para banco e armazenamento privado permanentes.
 
 ## Executar
 
@@ -42,3 +44,12 @@ O fluxo `.github/workflows/build-android.yml` compila um APK de teste automatica
 ## Produção
 
 Esta entrega é um MVP funcional. O mapa usa OpenStreetMap, Nominatim e OSRM sem chave para demonstração. Antes da operação comercial com volume, contrate ou hospede serviços compatíveis com as políticas dessas plataformas. Também substitua o acesso demonstrativo por autenticação via SMS, configure Pix/cartão, notificações push, HTTPS, banco PostgreSQL, backups e análise jurídica/regulatória municipal. Não use dados reais no modo de demonstração.
+
+## Versão 2
+
+- Interface mapa-primeiro com novo design responsivo.
+- Cadastro com telefone e senha.
+- Cadastro de mototaxista com idade mínima, CNH A/AB, validade, motocicleta, Pix e três documentos.
+- Estado de análise, aprovação e rejeição com justificativa.
+- Painel administrativo para visualizar documentos e liberar condutores.
+- Condutor bloqueado de ficar online até a aprovação.
