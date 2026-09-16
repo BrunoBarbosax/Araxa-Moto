@@ -1,0 +1,122 @@
+:root {
+  --black: #315d8e;
+  --ink: #24364b;
+  --lime: #4c7fb7;
+  --blue: #3f70a8;
+  --paper: #f4f7fb;
+  --white: #ffffff;
+  --muted: #718096;
+  --line: #dce5ef;
+  --shadow: 0 18px 48px rgba(38, 73, 111, .15);
+}
+
+body {
+  background: linear-gradient(180deg, #f8fbff 0%, #f1f5fa 100%);
+}
+
+header {
+  color: #284b70;
+  background: rgba(255, 255, 255, .96);
+  border-bottom: 1px solid #dce5ef;
+  box-shadow: 0 5px 22px rgba(43, 81, 122, .08);
+  backdrop-filter: blur(14px);
+}
+
+.brand small { color: #7b8da2; }
+
+.logo {
+  color: #fff;
+  background: linear-gradient(145deg, #4b80b9, #315f92);
+  box-shadow: 0 7px 18px rgba(49, 95, 146, .24);
+}
+
+.ghost {
+  color: #356493;
+  background: #edf4fb;
+  border-color: #d5e3f2;
+}
+
+.auth-art {
+  background:
+    radial-gradient(circle at 78% 22%, rgba(255,255,255,.2) 0 8%, transparent 8.5%),
+    linear-gradient(145deg, #5b8dc1 0%, #3f70a8 55%, #315c8b 100%);
+  box-shadow: 0 24px 60px rgba(48, 93, 140, .23);
+}
+
+.auth-art .badge {
+  color: #315d8e;
+  background: #fff;
+}
+
+.auth-card, .card, .sheet, .ride-sheet {
+  border: 1px solid rgba(207, 221, 236, .85);
+  box-shadow: 0 14px 38px rgba(46, 80, 118, .1);
+}
+
+.tabs, .segmented { background: #edf3f9; }
+.tabs button.active, .segmented button.active { color: #315f92; }
+
+input, select, textarea {
+  color: #263a50;
+  background: #fbfdff;
+  border-color: #d8e3ee;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #4c7fb7;
+  box-shadow: 0 0 0 4px rgba(76, 127, 183, .12);
+}
+
+.btn {
+  background: linear-gradient(135deg, #4c7fb7, #356596);
+  box-shadow: 0 7px 16px rgba(53, 101, 150, .18);
+}
+
+.btn.lime, .btn.blue {
+  color: #fff;
+  background: linear-gradient(135deg, #568bc3, #386b9f);
+}
+
+.btn.soft {
+  color: #315f8e;
+  background: #edf4fb;
+  box-shadow: none;
+}
+
+.status-hero {
+  background: linear-gradient(140deg, #5688bb, #37699e);
+  box-shadow: 0 18px 42px rgba(48, 96, 146, .2);
+}
+
+.status-dot.online {
+  background: #fff;
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, .18);
+}
+
+.pill {
+  color: #315c88;
+  border: 1px solid rgba(211, 225, 239, .9);
+  box-shadow: 0 10px 26px rgba(46, 80, 118, .14);
+}
+
+.location-input input { background: #f3f7fb; }
+.route-summary { color: #315d8e; background: #edf5fc; border: 1px solid #d5e5f4; }
+.route { border-left-color: #4b7eb5; }
+.ride { border-color: #dce5ef; background: #fff; }
+
+nav {
+  border-top-color: #dce5ef;
+  box-shadow: 0 -8px 24px rgba(47, 82, 120, .07);
+}
+
+nav button.active {
+  color: #315f92;
+  background: #eaf2fa;
+}
+
+#toast { background: #315d8e; }
+
+@media (max-width: 760px) {
+  .auth-art { min-height: 235px; }
+  .ride-sheet { border: 1px solid #d8e4ef; }
+}
