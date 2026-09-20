@@ -1,4 +1,37 @@
-# Araxá Moto
+# Araxá Moto — versão piloto quase final
+
+Aplicativo de operação de mototáxi, entregas e serviços, com perfis de passageiro, mototaxista e administração.
+
+## Entregue nesta versão
+
+- cálculo pela rota real do mapa e detalhamento antes da confirmação;
+- tarifas urbana, rural, rodoviária, intermunicipal, serviços/documentos, piloto à disposição e entrega;
+- corrida imediata ou agendada, paradas, ida e volta e solicitação para outra pessoa;
+- despacho, aceite, chegada, código de embarque, execução, conclusão, cancelamento e avaliação;
+- passageiro com planos, histórico, notificações, contato de emergência e chamados;
+- freelancer com diária de R$ 6,00 e repasse de 92%;
+- contratado com salário mensal, jornada e hora extra sujeita à aprovação;
+- cadastro documental e aprovação administrativa;
+- contratos individuais e empresariais, controle de créditos e vencimento;
+- painel administrativo com corridas, cadastros, finanças, horas extras, incidentes e auditoria;
+- estrutura Android e iOS via Capacitor.
+
+## Pendências externas e burocráticas
+
+- CNPJ, termos, política de privacidade, contratos e validação jurídica municipal;
+- conta bancária/Pix empresarial e credenciais do intermediador de pagamento;
+- provedores de SMS, WhatsApp e notificações push;
+- chaves próprias e limites comerciais de geocodificação/mapas;
+- banco PostgreSQL gerenciado, backup e observabilidade de produção;
+- contas Google Play e Apple Developer, certificados e publicação;
+- homologação operacional, seguros e validação dos documentos reais.
+
+## Regimes de trabalho
+
+- Freelancer: paga R$ 6,00 por dia para operar, recebe 92% do valor das corridas e o aplicativo registra 8% de comissão.
+- Contratado: recebe salário mensal fixo definido pelo administrador, sem diária e sem comissão individual por corrida.
+- O candidato informa uma preferência no cadastro, mas somente o administrador confirma o regime na aprovação.
+- Contratados podem iniciar e encerrar um registro de hora extra. O administrador define o valor por hora e aprova ou rejeita cada registro antes de ele entrar no total aprovado.
 
 MVP instalável para corridas de mototáxi e entregas. Inclui cadastro de passageiros, cadastro e análise documental de mototaxistas, mapa OpenStreetMap, rota, distância e preço automáticos, carteira, diária de R$ 6, comissão de 8% e painel operacional.
 
