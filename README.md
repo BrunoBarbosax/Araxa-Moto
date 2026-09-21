@@ -1,3 +1,7 @@
+# Araxá Moto V5 — Premium
+
+Redesign completo preto e dourado, preservando backend, PostgreSQL, rastreamento em tempo real e recursos da V4.
+
 # Araxá Moto — versão piloto quase final
 
 Aplicativo de operação de mototáxi, entregas e serviços, com perfis de passageiro, mototaxista e administração.

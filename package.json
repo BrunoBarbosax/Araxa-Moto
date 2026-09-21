@@ -1,6 +1,6 @@
 {
   "name": "araxa-moto",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "private": true,
   "description": "Araxá Moto v4 - mobilidade local com PostgreSQL e painel de produção",
   "scripts": {
