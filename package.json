@@ -1,8 +1,8 @@
 {
   "name": "araxa-moto",
-  "version": "6.4.0",
+  "version": "6.5.0",
   "private": true,
-  "description": "Araxá Moto V6.3 Premium - GPS, documentos e diária freelancer com prazo de 24h",
+  "description": "Araxá Moto V6.5 Premium - correção nativa de permissão GPS Android/iOS",
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
@@ -12,7 +12,8 @@
     "@capacitor/android": "^7.4.0",
     "@capacitor/core": "^7.4.0",
     "@capacitor/ios": "^7.4.0",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "@capacitor/geolocation": "^7.1.5"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.4.0"
