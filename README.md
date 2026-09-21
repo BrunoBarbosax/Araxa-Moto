@@ -88,3 +88,13 @@ Esta entrega é um MVP funcional. O mapa usa OpenStreetMap, Nominatim e OSRM sem
 - Estado de análise, aprovação e rejeição com justificativa.
 - Painel administrativo para visualizar documentos e liberar condutores.
 - Condutor bloqueado de ficar online até a aprovação.
+
+
+## V4 — mapa em tempo real
+- Mototaxistas online aparecem no mapa do passageiro quando há posição GPS recente.
+- Após o aceite, o passageiro acompanha o mototaxista no mapa com atualização a cada ~4 segundos.
+- O motorista online envia GPS enquanto o app está aberto e autorizado.
+- A API não expõe localização de motoristas offline ou com posição antiga.
+- Nova identidade visual, logo e tela de acompanhamento.
+
+> Para rastreamento com o aplicativo minimizado no Android/iOS, será necessária a etapa nativa de localização em segundo plano e as permissões das lojas.

@@ -79,7 +79,7 @@ async function calculateRoute(origin,destination,originCoords) {
 }
 
 async function api(req,res,url) {
-  if(req.method==='GET' && url.pathname==='/api/health') { try { return json(res,200,{service:'araxa-moto',version:'3.0.0',...(await storage.health())}); } catch { return json(res,503,{service:'araxa-moto',ok:false}); } }
+  if(req.method==='GET' && url.pathname==='/api/health') { try { return json(res,200,{service:'araxa-moto',version:'4.0.0',...(await storage.health())}); } catch { return json(res,503,{service:'araxa-moto',ok:false}); } }
   const db=await loadDB();
   if(req.method==='POST' && url.pathname==='/api/admin-login') {
     const data=await body(req);const expectedUser=process.env.ADMIN_USERNAME;const expectedPassword=process.env.ADMIN_PASSWORD;
@@ -212,6 +212,20 @@ async function api(req,res,url) {
   const ratingMatch=url.pathname.match(/^\/api\/rides\/([^/]+)\/rating$/);if(req.method==='POST'&&ratingMatch){const ride=db.rides.find(r=>r.id===ratingMatch[1]);if(!ride||![ride.passengerId,ride.driverId].includes(user.id))return json(res,404,{error:'Corrida não encontrada'});if(ride.status!=='completed')return json(res,409,{error:'Avalie após a conclusão'});const data=await body(req);const score=Math.max(1,Math.min(5,Math.round(Number(data.score)||0)));if(db.ratings.some(x=>x.rideId===ride.id&&x.fromUserId===user.id))return json(res,409,{error:'Avaliação já enviada'});const targetId=user.id===ride.passengerId?ride.driverId:ride.passengerId;db.ratings.push({id:id('rating'),rideId:ride.id,fromUserId:user.id,targetId,score,reason:String(data.reason||'').slice(0,240),createdAt:new Date().toISOString()});const target=db.users.find(x=>x.id===targetId);const scores=db.ratings.filter(x=>x.targetId===targetId);if(target)target.rating=Number((scores.reduce((s,x)=>s+x.score,0)/scores.length).toFixed(1));await saveDB(db);return json(res,201,{ok:true});}
   if(req.method==='POST'&&url.pathname==='/api/incidents'){const data=await body(req);const incident={id:id('incident'),userId:user.id,userName:user.name,rideId:String(data.rideId||''),category:String(data.category||'support').slice(0,40),description:String(data.description||'').slice(0,1000),status:'open',createdAt:new Date().toISOString()};db.incidents.push(incident);notify(db,'admin-main','Novo chamado de suporte',`${user.name}: ${incident.category}`,incident.rideId);await saveDB(db);return json(res,201,{incident});}
   if(req.method==='POST'&&url.pathname==='/api/driver/location'){if(user.role!=='driver')return json(res,403,{error:'Perfil inválido'});const data=await body(req);user.location={lat:Number(data.lat),lon:Number(data.lon),updatedAt:new Date().toISOString()};await saveDB(db);return json(res,200,{ok:true});}
+  if(req.method==='GET'&&url.pathname==='/api/drivers/online') {
+    const freshAfter=Date.now()-120000;
+    const drivers=db.users.filter(u=>u.role==='driver'&&u.approved&&u.online&&u.location&&Number.isFinite(Number(u.location.lat))&&Number.isFinite(Number(u.location.lon))&&new Date(u.location.updatedAt).getTime()>freshAfter).map(u=>({id:u.id,name:u.name,rating:u.rating||5,motorcycleModel:u.motorcycleModel||'',motorcycleColor:u.motorcycleColor||'',location:u.location}));
+    return json(res,200,{drivers,updatedAt:new Date().toISOString()});
+  }
+  const trackingMatch=url.pathname.match(/^\/api\/rides\/([^/]+)\/tracking$/);
+  if(req.method==='GET'&&trackingMatch) {
+    const ride=db.rides.find(r=>r.id===trackingMatch[1]);
+    if(!ride)return json(res,404,{error:'Corrida não encontrada'});
+    if(user.role!=='admin'&&ride.passengerId!==user.id&&ride.driverId!==user.id)return json(res,403,{error:'Sem permissão'});
+    const driver=ride.driverId?db.users.find(u=>u.id===ride.driverId):null;
+    const driverPublic=driver?{id:driver.id,name:driver.name,rating:driver.rating||5,plate:driver.plate||'',motorcycleModel:driver.motorcycleModel||'',motorcycleColor:driver.motorcycleColor||'',location:driver.location||null}:null;
+    return json(res,200,{ride,driver:driverPublic,serverTime:new Date().toISOString()});
+  }
   if(req.method==='POST'&&url.pathname==='/api/driver/journey'){if(user.role!=='driver'||user.employmentType!=='employee')return json(res,403,{error:'Jornada disponível para contratado'});const data=await body(req);const active=[...db.journeys].reverse().find(x=>x.driverId===user.id&&x.status!=='ended');if(data.action==='start'){if(active)return json(res,409,{error:'Jornada já iniciada'});db.journeys.push({id:id('journey'),driverId:user.id,driverName:user.name,status:'working',startedAt:new Date().toISOString(),events:[]});}else{if(!active)return json(res,409,{error:'Nenhuma jornada iniciada'});if(data.action==='break')active.status=active.status==='break'?'working':'break';else if(data.action==='end'){active.status='ended';active.endedAt=new Date().toISOString()}else return json(res,400,{error:'Ação inválida'});active.events.push({action:data.action,at:new Date().toISOString()});}await saveDB(db);return json(res,200,{journeys:db.journeys.filter(x=>x.driverId===user.id).slice(-30).reverse()});}
   if(req.method==='GET'&&url.pathname==='/api/contracts'){return json(res,200,{contracts:db.contracts.filter(x=>user.role==='admin'||x.userId===user.id),plans:db.settings.plans});}
   if(req.method==='POST'&&url.pathname==='/api/contracts'){if(user.role!=='passenger')return json(res,403,{error:'Plano disponível para clientes'});const data=await body(req);const plan=db.settings.plans[data.plan];if(!plan)return json(res,400,{error:'Plano inválido'});const contract={id:id('contract'),userId:user.id,userName:user.name,plan:data.plan,name:plan.name,status:'active',price:plan.price,totalCredits:plan.credits,remainingCredits:plan.credits,authorizedUsers:[],autoRenew:Boolean(data.autoRenew),startsAt:new Date().toISOString(),endsAt:new Date(Date.now()+30*864e5).toISOString()};db.contracts.push(contract);audit(db,user,'contract_created',contract.id,{plan:data.plan});await saveDB(db);return json(res,201,{contract});}
@@ -247,7 +261,7 @@ const server=http.createServer(async(req,res)=>{
   } catch(err) { json(res,err.message==='too_large'?413:400,{error:err.message==='invalid_json'?'JSON inválido':'Não foi possível processar'}); }
 });
 if(require.main===module){
-  storage.initStorage({seed,dbFile:DB_FILE}).then(()=>server.listen(PORT,'0.0.0.0',()=>console.log(`Araxá Moto v3 disponível na porta ${PORT}`))).catch(err=>{console.error('[startup]',err);process.exit(1)});
+  storage.initStorage({seed,dbFile:DB_FILE}).then(()=>server.listen(PORT,'0.0.0.0',()=>console.log(`Araxá Moto v4 disponível na porta ${PORT}`))).catch(err=>{console.error('[startup]',err);process.exit(1)});
   for(const signal of ['SIGTERM','SIGINT'])process.on(signal,async()=>{await storage.close();process.exit(0)});
 }
 module.exports={server,seed,estimate,calculateRoute,calculatePrice};
