@@ -198,3 +198,7 @@ Antes de testar, desinstale o Araxá Moto antigo do celular e instale o APK novo
 - Seleção salva latitude/longitude do destino, melhorando a precisão da rota.
 - Debounce de 380 ms e cancelamento de pesquisas antigas.
 - Interface premium de sugestões integrada ao campo Destino.
+
+
+## V6.8 — busca de endereços
+Autocomplete passou a consultar o backend, com Nominatim limitado/priorizado para Araxá e fallback Photon. Sugestões começam com 2 caracteres e retornam rua, bairro, cidade e coordenadas quando disponíveis.

@@ -188,7 +188,7 @@ function installDestinationAutocomplete(){
   const close=()=>{list.classList.add('hidden');list.innerHTML=''};
   input.addEventListener('input',()=>{
     selectedDestinationPoint=null; clearTimeout(timer); if(controller)controller.abort();
-    const q=input.value.trim(); if(q.length<3){close();return}
+    const q=input.value.trim(); if(q.length<2){close();return}
     list.innerHTML='<div class="address-loading">Buscando endereços…</div>';list.classList.remove('hidden');
     const mySeq=++seq;
     timer=setTimeout(async()=>{try{
@@ -196,12 +196,12 @@ function installDestinationAutocomplete(){
       const r=await fetch(`/api/address-suggestions?q=${encodeURIComponent(q)}`,{headers:session?{Authorization:`Bearer ${session}`}:{},signal:controller.signal});
       const d=await r.json(); if(mySeq!==seq)return;
       const items=d.suggestions||[];
-      if(!items.length){list.innerHTML='<div class="address-empty">Nenhum endereço encontrado. Continue digitando ou informe um ponto de referência.</div>';return}
+      if(!items.length){list.innerHTML='<div class="address-empty">Nenhum endereço encontrado ainda. Tente incluir o bairro ou continue digitando.</div>';return}
       list.innerHTML=items.map((x,i)=>`<button type="button" class="address-option" data-i="${i}"><span class="address-pin">◆</span><span><b>${escapeHtml(x.label.split(',')[0])}</b><small>${escapeHtml(x.label)}</small></span></button>`).join('');
       list.querySelectorAll('.address-option').forEach(b=>b.onclick=()=>{const x=items[Number(b.dataset.i)];input.value=x.label;selectedDestinationPoint={lat:x.lat,lon:x.lon};close();input.dispatchEvent(new Event('change',{bubbles:true}));});
     }catch(e){if(e.name!=='AbortError')close()}},380);
   });
-  input.addEventListener('focus',()=>{if(list.innerHTML&&input.value.trim().length>=3)list.classList.remove('hidden')});
+  input.addEventListener('focus',()=>{if(list.innerHTML&&input.value.trim().length>=2)list.classList.remove('hidden')});
   document.addEventListener('click',e=>{if(!wrap.contains(e.target))close()});
 }
 function escapeHtml(v){return String(v||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}

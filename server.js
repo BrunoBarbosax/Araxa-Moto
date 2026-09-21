@@ -136,22 +136,40 @@ async function api(req,res,url) {
   if(req.method==='GET' && url.pathname==='/api/me') return json(res,200,{user:safeUser(user),settings:db.settings,notifications:db.notifications.filter(n=>n.userId===user.id).slice(-30).reverse()});
   if(req.method==='GET' && url.pathname==='/api/address-suggestions') {
     const q=String(url.searchParams.get('q')||'').trim();
-    if(q.length<3) return json(res,200,{suggestions:[]});
+    if(q.length<2) return json(res,200,{suggestions:[]});
+    const normalize=(item,source)=>{
+      if(source==='nominatim') {
+        const a=item.address||{};
+        const street=a.road||a.pedestrian||a.residential||a.footway||a.path||a.neighbourhood||item.name;
+        const locality=a.suburb||a.neighbourhood||a.city_district||a.village||'';
+        const city=a.city||a.town||a.municipality||a.county||'Araxá';
+        const parts=[street,a.house_number,locality,city,a.state].filter(Boolean);
+        return {label:parts.join(', ')||item.display_name,lat:Number(item.lat),lon:Number(item.lon),type:item.type||item.addresstype||'',city};
+      }
+      const p=item.properties||{}, c=item.geometry?.coordinates||[];
+      const street=p.street||p.name;
+      const parts=[street,p.housenumber,p.district||p.locality,p.city||p.county,p.state].filter(Boolean);
+      return {label:parts.join(', '),lat:Number(c[1]),lon:Number(c[0]),type:p.type||'',city:p.city||p.county||''};
+    };
+    const unique=(items)=>{const seen=new Set();return items.filter(x=>x&&x.label&&Number.isFinite(x.lat)&&Number.isFinite(x.lon)).filter(x=>{const k=x.label.toLowerCase().replace(/\s+/g,' ');if(seen.has(k))return false;seen.add(k);return true})};
     try {
-      const target=new URL('https://photon.komoot.io/api/');
-      target.search=new URLSearchParams({q:`${q}, Araxá, Minas Gerais`,limit:'7',lang:'pt',lat:'-19.5937',lon:'-46.9400'});
-      const response=await fetch(target,{headers:{'User-Agent':'AraxaMoto/6.7 (address search)'},signal:AbortSignal.timeout(8000)});
-      if(!response.ok)throw new Error('suggestions_unavailable');
-      const data=await response.json();
-      const seen=new Set();
-      const suggestions=(data.features||[]).map(f=>{
-        const p=f.properties||{}, c=f.geometry?.coordinates||[];
-        const parts=[p.name,p.street&&p.street!==p.name?p.street:null,p.housenumber,p.district||p.locality,p.city||p.county,p.state].filter(Boolean);
-        const label=parts.join(', ');
-        return {label,lat:Number(c[1]),lon:Number(c[0]),type:p.type||'',city:p.city||p.county||''};
-      }).filter(x=>x.label&&Number.isFinite(x.lat)&&Number.isFinite(x.lon)).filter(x=>{const k=x.label.toLowerCase();if(seen.has(k))return false;seen.add(k);return true}).slice(0,6);
-      return json(res,200,{suggestions});
-    } catch { return json(res,200,{suggestions:[]}); }
+      let suggestions=[];
+      // Nominatim is called by our backend (not by the APK). Bias/bound results to Araxá first.
+      const n=new URL('https://nominatim.openstreetmap.org/search');
+      n.search=new URLSearchParams({q:`${q}, Araxá, Minas Gerais, Brasil`,format:'jsonv2',addressdetails:'1',limit:'10',countrycodes:'br',accept_language:'pt-BR',viewbox:'-47.15,-19.40,-46.70,-19.85',bounded:'1'});
+      const nr=await fetch(n,{headers:{'User-Agent':'AraxaMoto/6.8 contato-app','Accept':'application/json'},signal:AbortSignal.timeout(9000)});
+      if(nr.ok) suggestions=unique((await nr.json()).map(x=>normalize(x,'nominatim')));
+      // If the strict Araxá search returns too little, try Photon and merge results.
+      if(suggestions.length<5){
+        const ph=new URL('https://photon.komoot.io/api/');
+        ph.search=new URLSearchParams({q:`${q} Araxá MG`,limit:'12',lang:'pt',lat:'-19.5937',lon:'-46.9400'});
+        const pr=await fetch(ph,{headers:{'User-Agent':'AraxaMoto/6.8'},signal:AbortSignal.timeout(9000)});
+        if(pr.ok){const pd=await pr.json();suggestions=unique([...suggestions,...(pd.features||[]).map(x=>normalize(x,'photon'))]);}
+      }
+      // Keep Araxá and nearby matches first, but don't return an empty list just because city metadata differs.
+      suggestions.sort((a,b)=>{const aa=/arax[aá]/i.test(a.label)?0:1,bb=/arax[aá]/i.test(b.label)?0:1;return aa-bb});
+      return json(res,200,{suggestions:suggestions.slice(0,8)});
+    } catch(e) { return json(res,200,{suggestions:[],warning:'address_search_unavailable'}); }
   }
   if(req.method==='POST' && url.pathname==='/api/route') {
     const data=await body(req);
