@@ -190,3 +190,11 @@ APK de teste esperado em:
 `android/app/build/outputs/apk/debug/app-debug.apk`
 
 Antes de testar, desinstale o Araxá Moto antigo do celular e instale o APK novo. Em seguida, em Configurações > Apps > Araxá Moto > Permissões, a opção Localização deve existir.
+
+
+## V6.7 — Busca inteligente de destino
+- Sugestões de endereço conforme o passageiro digita (a partir de 3 caracteres).
+- Prioridade geográfica para Araxá/MG.
+- Seleção salva latitude/longitude do destino, melhorando a precisão da rota.
+- Debounce de 380 ms e cancelamento de pesquisas antigas.
+- Interface premium de sugestões integrada ao campo Destino.

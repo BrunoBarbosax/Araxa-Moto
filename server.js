@@ -81,10 +81,11 @@ async function geocode(address) {
   geoCache.set(key,point);
   return point;
 }
-async function calculateRoute(origin,destination,originCoords) {
+async function calculateRoute(origin,destination,originCoords,destinationCoords) {
   const hasCoords=originCoords&&Number.isFinite(Number(originCoords.lat))&&Number.isFinite(Number(originCoords.lon));
+  const hasDestCoords=destinationCoords&&Number.isFinite(Number(destinationCoords.lat))&&Number.isFinite(Number(destinationCoords.lon));
   const from=hasCoords?{lat:Number(originCoords.lat),lon:Number(originCoords.lon),label:'Minha localização atual'}:await geocode(origin);
-  const to=await geocode(destination);
+  const to=hasDestCoords?{lat:Number(destinationCoords.lat),lon:Number(destinationCoords.lon),label:String(destination||'Destino selecionado')}:await geocode(destination);
   const target=`https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson&steps=false`;
   const response=await fetch(target,{headers:{'User-Agent':'AraxaMoto-MVP/1.1'},signal:AbortSignal.timeout(12000)});
   if(!response.ok) throw new Error('routing_unavailable');
@@ -133,11 +134,30 @@ async function api(req,res,url) {
   const user=auth(req,db);
   if(!user) return json(res,401,{error:'Sessão inválida'});
   if(req.method==='GET' && url.pathname==='/api/me') return json(res,200,{user:safeUser(user),settings:db.settings,notifications:db.notifications.filter(n=>n.userId===user.id).slice(-30).reverse()});
+  if(req.method==='GET' && url.pathname==='/api/address-suggestions') {
+    const q=String(url.searchParams.get('q')||'').trim();
+    if(q.length<3) return json(res,200,{suggestions:[]});
+    try {
+      const target=new URL('https://photon.komoot.io/api/');
+      target.search=new URLSearchParams({q:`${q}, Araxá, Minas Gerais`,limit:'7',lang:'pt',lat:'-19.5937',lon:'-46.9400'});
+      const response=await fetch(target,{headers:{'User-Agent':'AraxaMoto/6.7 (address search)'},signal:AbortSignal.timeout(8000)});
+      if(!response.ok)throw new Error('suggestions_unavailable');
+      const data=await response.json();
+      const seen=new Set();
+      const suggestions=(data.features||[]).map(f=>{
+        const p=f.properties||{}, c=f.geometry?.coordinates||[];
+        const parts=[p.name,p.street&&p.street!==p.name?p.street:null,p.housenumber,p.district||p.locality,p.city||p.county,p.state].filter(Boolean);
+        const label=parts.join(', ');
+        return {label,lat:Number(c[1]),lon:Number(c[0]),type:p.type||'',city:p.city||p.county||''};
+      }).filter(x=>x.label&&Number.isFinite(x.lat)&&Number.isFinite(x.lon)).filter(x=>{const k=x.label.toLowerCase();if(seen.has(k))return false;seen.add(k);return true}).slice(0,6);
+      return json(res,200,{suggestions});
+    } catch { return json(res,200,{suggestions:[]}); }
+  }
   if(req.method==='POST' && url.pathname==='/api/route') {
     const data=await body(req);
     if(!data.destination||(!data.origin&&!data.originCoords)) return json(res,400,{error:'Informe origem e destino'});
     try {
-      const route=await calculateRoute(String(data.origin||''),String(data.destination),data.originCoords);
+      const route=await calculateRoute(String(data.origin||''),String(data.destination),data.originCoords,data.destinationCoords);
       const quote=calculatePrice(db.settings,{...data,distanceKm:route.distanceKm,durationMin:route.durationMin});
       return json(res,200,{route:{...route,price:quote.total,quote}});
     } catch(error) {

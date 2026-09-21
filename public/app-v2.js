@@ -174,3 +174,36 @@ if(session)startRealtime();session?boot():authScreen();
 
 function openDriverDocument(doc){let m=document.querySelector('#documentViewer');if(!m){m=document.createElement('div');m.id='documentViewer';m.className='document-viewer';document.body.appendChild(m)}const isPdf=String(doc.type||'').includes('pdf');m.innerHTML=`<div class="document-viewer-card"><div class="row"><div><b>${({cnh:'CNH',vehicle:'CRLV / Documento da moto',profile:'Foto de perfil'})[doc.kind]||doc.kind}</b><p class="fine">${doc.name||''}</p></div><button class="btn soft" id="closeDocument">Fechar</button></div><div class="document-stage">${isPdf?`<iframe src="${doc.preview}" title="Documento PDF"></iframe>`:`<img src="${doc.preview}" alt="Documento enviado">`}</div></div>`;m.classList.add('show');m.querySelector('#closeDocument').onclick=()=>m.classList.remove('show');m.onclick=e=>{if(e.target===m)m.classList.remove('show')}}
 document.addEventListener('click',e=>{const b=e.target.closest('.doc-preview');if(!b)return;const card=b.closest('[data-driver]');if(!card)return;const id=card.dataset.driver;api('/admin/drivers').then(d=>{const driver=d.drivers.find(x=>String(x.id)===String(id));const doc=driver?.documents?.[Number(b.dataset.docIndex)];if(doc)openDriverDocument(doc);else toast('Documento não encontrado')}).catch(x=>toast(x.message))});
+
+// V6.7 — autocomplete inteligente de destino
+let selectedDestinationPoint=null;
+function installDestinationAutocomplete(){
+  const input=document.querySelector('#request input[name="destination"]');
+  if(!input||input.dataset.autocompleteReady)return;
+  input.dataset.autocompleteReady='1';
+  const wrap=document.createElement('div');wrap.className='address-autocomplete';
+  input.parentNode.insertBefore(wrap,input);wrap.appendChild(input);
+  const list=document.createElement('div');list.className='address-suggestions hidden';wrap.appendChild(list);
+  let timer=0,controller=null,seq=0;
+  const close=()=>{list.classList.add('hidden');list.innerHTML=''};
+  input.addEventListener('input',()=>{
+    selectedDestinationPoint=null; clearTimeout(timer); if(controller)controller.abort();
+    const q=input.value.trim(); if(q.length<3){close();return}
+    list.innerHTML='<div class="address-loading">Buscando endereços…</div>';list.classList.remove('hidden');
+    const mySeq=++seq;
+    timer=setTimeout(async()=>{try{
+      controller=new AbortController();
+      const r=await fetch(`/api/address-suggestions?q=${encodeURIComponent(q)}`,{headers:session?{Authorization:`Bearer ${session}`}:{},signal:controller.signal});
+      const d=await r.json(); if(mySeq!==seq)return;
+      const items=d.suggestions||[];
+      if(!items.length){list.innerHTML='<div class="address-empty">Nenhum endereço encontrado. Continue digitando ou informe um ponto de referência.</div>';return}
+      list.innerHTML=items.map((x,i)=>`<button type="button" class="address-option" data-i="${i}"><span class="address-pin">◆</span><span><b>${escapeHtml(x.label.split(',')[0])}</b><small>${escapeHtml(x.label)}</small></span></button>`).join('');
+      list.querySelectorAll('.address-option').forEach(b=>b.onclick=()=>{const x=items[Number(b.dataset.i)];input.value=x.label;selectedDestinationPoint={lat:x.lat,lon:x.lon};close();input.dispatchEvent(new Event('change',{bubbles:true}));});
+    }catch(e){if(e.name!=='AbortError')close()}},380);
+  });
+  input.addEventListener('focus',()=>{if(list.innerHTML&&input.value.trim().length>=3)list.classList.remove('hidden')});
+  document.addEventListener('click',e=>{if(!wrap.contains(e.target))close()});
+}
+function escapeHtml(v){return String(v||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+const v67PassengerHome=passengerHome;
+passengerHome=function(){selectedDestinationPoint=null;v67PassengerHome();setTimeout(installDestinationAutocomplete,0);const calc=document.querySelector('#calculate'),f=document.querySelector('#request');if(calc&&f){const old=calc.onclick;calc.onclick=async function(){if(selectedDestinationPoint){const originalFetch=window.fetch;window.fetch=async function(resource,options){if(String(resource)==='/api/route'&&options?.body){try{const d=JSON.parse(options.body);d.destinationCoords=selectedDestinationPoint;options={...options,body:JSON.stringify(d)}}catch{}}return originalFetch.call(this,resource,options)};try{return await old.call(this)}finally{window.fetch=originalFetch}}return old.call(this)}}};
