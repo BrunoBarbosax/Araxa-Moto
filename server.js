@@ -44,9 +44,20 @@ function auth(req, db) {
   return db.users.find(u=>u.token===token);
 }
 function today() { return new Date().toISOString().slice(0,10); }
+function dailyDebtStatus(user) {
+  const amount=Math.max(0,Number(user.dailyDebtAmount||0));
+  if(!amount||!user.dailyDebtCreatedAt)return {pending:false,amount:0,overdue:false,hoursLeft:0,dueAt:null};
+  const created=new Date(user.dailyDebtCreatedAt).getTime();
+  const due=created+24*60*60*1000;
+  const left=due-Date.now();
+  return {pending:true,amount:Number(amount.toFixed(2)),overdue:left<=0,hoursLeft:Math.max(0,Math.ceil(left/3600000)),dueAt:new Date(due).toISOString()};
+}
+function attachDailyDebt(user) { user.dailyDebt=dailyDebtStatus(user); return user; }
+function clearDailyDebt(user) { user.dailyDebtAmount=0;user.dailyDebtCreatedAt=null;user.dailyDebtDueAt=null; }
+
 function id(prefix) { return `${prefix}_${crypto.randomUUID().slice(0,8)}`; }
 function publicUser(u) { const {token,...safe}=u; return safe; }
-function safeUser(u) { const {token,passwordHash,passwordSalt,documents,...safe}=u; return safe; }
+function safeUser(u) { const {token,passwordHash,passwordSalt,documents,...safe}=u; return attachDailyDebt(safe); }
 function normalizePhone(value) { return String(value||'').replace(/\D/g,''); }
 function passwordDigest(password,salt) { return crypto.scryptSync(String(password),salt,32).toString('hex'); }
 function secureEqual(a,b) { const left=crypto.createHash('sha256').update(String(a)).digest();const right=crypto.createHash('sha256').update(String(b)).digest();return crypto.timingSafeEqual(left,right); }
@@ -182,16 +193,30 @@ async function api(req,res,url) {
     if(user.role!=='driver')return json(res,403,{error:'Perfil inválido'});
     if(!user.approved)return json(res,403,{error:'Cadastro aguardando aprovação'});
     if(user.employmentType==='freelancer'&&!user.online && user.dailyFeeDate!==today()) {
-      if(user.balance<db.settings.dailyFee)return json(res,409,{error:'Saldo insuficiente para a diária'});
-      user.balance=Number((user.balance-db.settings.dailyFee).toFixed(2)); user.dailyFeeDate=today();
-      db.transactions.push({id:id('tx'),driverId:user.id,type:'daily_fee',amount:-db.settings.dailyFee,createdAt:new Date().toISOString()});
+      const debt=dailyDebtStatus(user);
+      if(debt.pending&&debt.overdue)return json(res,409,{error:`Diária pendente de ${debt.amount.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} vencida. Quite o pagamento para iniciar uma nova diária.`,code:'DAILY_DEBT_OVERDUE',dailyDebt:debt});
+      if(debt.pending) {
+        // Durante as primeiras 24h, a dívida existente mantém o freelancer liberado sem acumular outra diária fiada.
+        user.dailyFeeDate=today();
+      } else if(Number(user.balance||0)>=db.settings.dailyFee) {
+        user.balance=Number((user.balance-db.settings.dailyFee).toFixed(2)); user.dailyFeeDate=today();
+        db.transactions.push({id:id('tx'),driverId:user.id,type:'daily_fee',amount:-db.settings.dailyFee,createdAt:new Date().toISOString()});
+      } else {
+        // Primeira diária pode começar sem saldo. A cobrança fica pendente por 24 horas.
+        user.dailyFeeDate=today();user.dailyDebtAmount=Number(db.settings.dailyFee);user.dailyDebtCreatedAt=new Date().toISOString();user.dailyDebtDueAt=new Date(Date.now()+24*60*60*1000).toISOString();
+        db.transactions.push({id:id('tx'),driverId:user.id,type:'daily_fee_credit',amount:0,debtAmount:Number(db.settings.dailyFee),createdAt:user.dailyDebtCreatedAt});
+        notify(db,user.id,'Diária pendente',`Sua diária de R$ ${Number(db.settings.dailyFee).toFixed(2).replace('.',',')} pode ser paga em até 24 horas. Após o prazo, uma nova diária ficará bloqueada até a quitação.`);
+      }
     }
     user.online=!user.online; await saveDB(db); return json(res,200,{user:safeUser(user)});
   }
   if(req.method==='POST'&&url.pathname==='/api/driver/recharge') {
     if(user.role!=='driver')return json(res,403,{error:'Perfil inválido'});if(user.employmentType!=='freelancer')return json(res,403,{error:'Contratados não utilizam saldo de diária'}); const data=await body(req); const amount=Number(data.amount);
     if(!Number.isFinite(amount)||amount<=0||amount>1000)return json(res,400,{error:'Valor inválido'});
-    user.balance=Number((user.balance+amount).toFixed(2)); db.transactions.push({id:id('tx'),driverId:user.id,type:'recharge_demo',amount,createdAt:new Date().toISOString()}); await saveDB(db); return json(res,200,{user:safeUser(user)});
+    user.balance=Number((user.balance+amount).toFixed(2)); db.transactions.push({id:id('tx'),driverId:user.id,type:'recharge_demo',amount,createdAt:new Date().toISOString()});
+    const debt=dailyDebtStatus(user);
+    if(debt.pending&&user.balance>=debt.amount){user.balance=Number((user.balance-debt.amount).toFixed(2));db.transactions.push({id:id('tx'),driverId:user.id,type:'daily_fee_payment',amount:-debt.amount,createdAt:new Date().toISOString(),debtCreatedAt:user.dailyDebtCreatedAt});clearDailyDebt(user);notify(db,user.id,'Diária quitada','Pagamento da diária pendente confirmado. Você está liberado para iniciar novas diárias.');}
+    await saveDB(db); return json(res,200,{user:safeUser(user)});
   }
   if(req.method==='POST'&&url.pathname==='/api/driver/overtime/start') {
     if(user.role!=='driver'||user.employmentType!=='employee')return json(res,403,{error:'Hora extra disponível somente para contratados'});
@@ -204,7 +229,7 @@ async function api(req,res,url) {
   }
   if(req.method==='GET'&&url.pathname==='/api/driver/finance') {
     if(user.role!=='driver')return json(res,403,{error:'Perfil inválido'});const completed=db.rides.filter(r=>r.driverId===user.id&&r.status==='completed');const gross=completed.reduce((s,r)=>s+Number(r.price||0),0);const commission=user.employmentType==='freelancer'?gross*db.settings.commission:0;
-    const overtime=db.overtimeRecords.filter(r=>r.driverId===user.id).slice(-30).reverse();return json(res,200,{employmentType:user.employmentType,monthlySalary:user.monthlySalary||0,overtimeHourlyRate:user.overtimeHourlyRate||0,overtime,balance:user.balance||0,completed:completed.length,gross:Number(gross.toFixed(2)),commission:Number(commission.toFixed(2)),net:Number((gross-commission).toFixed(2)),transactions:db.transactions.filter(t=>t.driverId===user.id).slice(-30).reverse()});
+    const overtime=db.overtimeRecords.filter(r=>r.driverId===user.id).slice(-30).reverse();return json(res,200,{employmentType:user.employmentType,monthlySalary:user.monthlySalary||0,overtimeHourlyRate:user.overtimeHourlyRate||0,overtime,balance:user.balance||0,dailyDebt:dailyDebtStatus(user),completed:completed.length,gross:Number(gross.toFixed(2)),commission:Number(commission.toFixed(2)),net:Number((gross-commission).toFixed(2)),transactions:db.transactions.filter(t=>t.driverId===user.id).slice(-30).reverse()});
   }
   if(req.method==='POST'&&url.pathname==='/api/profile') {
     const data=await body(req);for(const key of ['cpf','photo','email'])if(data[key]!==undefined)user[key]=String(data[key]).slice(0,500000);if(Array.isArray(data.emergencyContacts))user.emergencyContacts=data.emergencyContacts.slice(0,3).map(x=>({name:String(x.name||'').slice(0,80),phone:normalizePhone(x.phone)}));audit(db,user,'profile_updated',user.id);await saveDB(db);return json(res,200,{user:safeUser(user)});

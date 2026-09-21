@@ -139,3 +139,20 @@ Esta entrega é um MVP funcional. O mapa usa OpenStreetMap, Nominatim e OSRM sem
 - Limite por documento ampliado para 10 MB (CNH, documento da moto e foto de perfil).
 - Limite do corpo da requisição ampliado para comportar os três documentos em Base64.
 - Validação mantida no navegador e no servidor.
+
+
+## V6.3
+- Visualização de CNH, CRLV e foto de perfil diretamente no painel administrativo, com miniaturas e tela ampliada.
+- Fluxo de verificação/solicitação de GPS para passageiro e mototaxista.
+- Permissões ACCESS_COARSE_LOCATION e ACCESS_FINE_LOCATION adicionadas ao Android.
+- Mensagens específicas para GPS desligado e permissão negada.
+
+
+## V6.3 — diária freelancer com prazo de 24 horas
+- Freelancer pode iniciar a primeira diária mesmo sem saldo.
+- A diária de R$ 6 fica pendente por até 24 horas.
+- Durante o prazo, o motorista continua trabalhando normalmente.
+- Não acumula várias diárias fiadas: existe no máximo uma pendência.
+- Após 24 horas sem quitação, uma nova diária fica bloqueada até o pagamento.
+- Ao adicionar saldo suficiente, a pendência é quitada automaticamente.
+- Contratados não são afetados por essa regra.
