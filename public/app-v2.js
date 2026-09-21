@@ -21,7 +21,8 @@ async function boot(){try{const d=await api('/me');me=d.user;settings=d.settings
 function render(v){if(v==='home')passengerHome();else if(v==='history')rideList('passenger');else if(v==='safety')safety();else if(v==='driver')driverHome();else if(v==='wallet')wallet();else if(v==='driverHistory')rideList('driver');else if(v==='admin')adminHome();else if(v==='reviews')reviews();else if(v==='operations')adminOperations()}
 let gpsPermissionRequestInFlight=false;
 function hideGpsGate(){const m=document.querySelector('#gpsGate');if(m)m.classList.remove('show')}
-function nativeGeo(){try{if(window.Capacitor?.isNativePlatform?.()&&window.Capacitor?.registerPlugin)return window.Capacitor.registerPlugin('Geolocation')}catch{}return null}
+function isNativeApp(){try{return !!window.Capacitor?.isNativePlatform?.()}catch{return false}}
+function nativeGeo(){try{if(isNativeApp()&&window.Capacitor?.registerPlugin)return window.Capacitor.registerPlugin('Geolocation')}catch{}return null}
 async function readGeoPermission(){
   const ng=nativeGeo();
   if(ng){try{const p=await ng.checkPermissions();return p.location||p.coarseLocation||'prompt'}catch{return 'prompt'}}
