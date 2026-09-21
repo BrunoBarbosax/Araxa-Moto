@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" role="img" aria-label="Araxá Moto">
+<defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1a8"/><stop offset=".3" stop-color="#ffc72c"/><stop offset=".72" stop-color="#d99a00"/><stop offset="1" stop-color="#fff0a0"/></linearGradient><filter id="s"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-opacity=".28"/></filter></defs>
+<g filter="url(#s)"><path fill="url(#gold)" d="M50 125 127 25h49l72 100h-51l-19-27h-71l-20 27zm76-60-20 29h52l-20-29-6-11z"/><path fill="#fff" d="M31 142h151l-22 28H18z"/><path fill="url(#gold)" d="M55 176h117l-19 24H40z"/>
+<path fill="none" stroke="url(#gold)" stroke-width="15" stroke-linecap="round" d="M215 78c21-39 73-58 115-40 29 13 47 40 49 70"/><path fill="#111318" stroke="url(#gold)" stroke-width="8" d="M269 61c38-13 81 10 88 50l-52-7-30-26z"/><path fill="#fff" d="m302 83 49 7-17 17-40-7z"/></g>
+<text x="205" y="159" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="55" font-weight="900" font-style="italic">ARAXÁ</text><text x="411" y="159" fill="url(#gold)" font-family="Arial,Helvetica,sans-serif" font-size="55" font-weight="900" font-style="italic">MOTO</text><text x="209" y="191" fill="#d5d7da" font-family="Arial,Helvetica,sans-serif" font-size="14" letter-spacing="7">SEMPRE COM VOCÊ</text>
+</svg>
