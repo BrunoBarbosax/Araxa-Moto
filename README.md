@@ -1,15 +1,3 @@
-# Araxá Moto V6.4
-
-## Novidade: autorização de localização dentro do aplicativo
-
-- Passageiro: ao tocar para usar a localização, o app abre o pedido oficial de permissão do Android/iOS.
-- Mototaxista: para ficar online e compartilhar a posição, a permissão de localização é solicitada no próprio app.
-- Se a permissão estiver negada, o app mostra uma tela própria para tentar autorizar novamente.
-- Se o usuário bloqueou permanentemente a permissão ou desligou o serviço de localização do aparelho, o app informa que será necessário reativá-lo nas configurações do sistema.
-- Corrigido o segundo fluxo da tela do passageiro que ainda usava acesso direto ao navigator.geolocation e podia apenas exibir “Autorize o GPS” sem abrir o fluxo completo.
-
-Mantém todos os recursos da V6.3, PostgreSQL, documentos e regra de diária freelancer com prazo de 24h.
-
 # Araxá Moto V6 Premium
 
 Versão de produção baseada na V5, preservando PostgreSQL e recursos existentes.
@@ -168,3 +156,10 @@ Esta entrega é um MVP funcional. O mapa usa OpenStreetMap, Nominatim e OSRM sem
 - Após 24 horas sem quitação, uma nova diária fica bloqueada até o pagamento.
 - Ao adicionar saldo suficiente, a pendência é quitada automaticamente.
 - Contratados não são afetados por essa regra.
+
+
+## V6.4 — correção GPS
+- Corrige o loop da tela de autorização de localização.
+- Revalida a permissão ao voltar das configurações.
+- Separa permissão negada de GPS/localização desligada.
+- Evita solicitações simultâneas de permissão.
