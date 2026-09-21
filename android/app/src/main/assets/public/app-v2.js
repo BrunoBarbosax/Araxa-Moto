@@ -21,29 +21,67 @@ async function boot(){try{const d=await api('/me');me=d.user;settings=d.settings
 function render(v){if(v==='home')passengerHome();else if(v==='history')rideList('passenger');else if(v==='safety')safety();else if(v==='driver')driverHome();else if(v==='wallet')wallet();else if(v==='driverHistory')rideList('driver');else if(v==='admin')adminHome();else if(v==='reviews')reviews();else if(v==='operations')adminOperations()}
 let gpsPermissionRequestInFlight=false;
 function hideGpsGate(){const m=document.querySelector('#gpsGate');if(m)m.classList.remove('show')}
-async function readGeoPermission(){try{if(navigator.permissions?.query){return (await navigator.permissions.query({name:'geolocation'})).state}}catch{}return 'unknown'}
-async function probeLocation({timeout=12000}={}){return new Promise(resolve=>{if(!navigator.geolocation)return resolve({ok:false,reason:'unsupported'});navigator.geolocation.getCurrentPosition(p=>resolve({ok:true,position:p}),e=>resolve({ok:false,reason:e.code===1?'denied':e.code===2?'unavailable':'timeout',error:e}),{enableHighAccuracy:true,timeout,maximumAge:5000})})}
-async function ensureLocationAccess({silent=false}={}){
-  if(!navigator.geolocation){if(!silent)showGpsGate('Este aparelho ou navegador não oferece localização.');return false}
-  const state=await readGeoPermission();
-  if(state==='denied'){if(!silent)showGpsGate('A localização está bloqueada. Abra as configurações do aplicativo/navegador e permita Localização.');return false}
-  const result=await probeLocation();
+function isNativeApp(){try{return !!window.Capacitor?.isNativePlatform?.()}catch{return false}}
+function nativeGeo(){try{if(isNativeApp()&&window.Capacitor?.registerPlugin)return window.Capacitor.registerPlugin('Geolocation')}catch{}return null}
+async function readGeoPermission(){
+  const ng=nativeGeo();
+  if(ng){try{const p=await ng.checkPermissions();return p.location||p.coarseLocation||'prompt'}catch{return 'prompt'}}
+  try{if(navigator.permissions?.query)return (await navigator.permissions.query({name:'geolocation'})).state}catch{}
+  return 'prompt'
+}
+async function askGeoPermission(){
+  const ng=nativeGeo();
+  if(ng){try{const p=await ng.requestPermissions({permissions:['location','coarseLocation']});return p.location||p.coarseLocation||'denied'}catch{return 'denied'}}
+  // Na web, o próprio getCurrentPosition exibe o diálogo do navegador.
+  return 'prompt'
+}
+async function probeLocation({timeout=15000,requestPermission=false}={}){
+  const ng=nativeGeo();
+  if(ng){
+    try{
+      let state=await readGeoPermission();
+      if(requestPermission&&state!=='granted')state=await askGeoPermission();
+      if(state!=='granted'&&state!=='limited')return {ok:false,reason:'denied'};
+      const p=await ng.getCurrentPosition({enableHighAccuracy:true,timeout,maximumAge:5000});
+      return {ok:true,position:{coords:{latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy,heading:p.coords.heading,speed:p.coords.speed}}};
+    }catch(e){return {ok:false,reason:String(e?.message||'').toLowerCase().includes('permission')?'denied':'unavailable',error:e}}
+  }
+  return new Promise(resolve=>{if(!navigator.geolocation)return resolve({ok:false,reason:'unsupported'});navigator.geolocation.getCurrentPosition(p=>resolve({ok:true,position:p}),e=>resolve({ok:false,reason:e.code===1?'denied':e.code===2?'unavailable':'timeout',error:e}),{enableHighAccuracy:true,timeout,maximumAge:5000})})
+}
+async function ensureLocationAccess({silent=false,requestPermission=false}={}){
+  if(!navigator.geolocation&&!nativeGeo()){if(!silent)showGpsGate('Este aparelho ou navegador não oferece localização.');return false}
+  const result=await probeLocation({requestPermission});
   if(result.ok){hideGpsGate();sessionStorage.setItem('am_gps_ok','1');return true}
   sessionStorage.removeItem('am_gps_ok');
   if(!silent){
-    const msg=result.reason==='denied'?'A permissão de localização não foi concedida. Toque em “Autorizar GPS” para tentar novamente.':result.reason==='unavailable'?'A permissão pode estar liberada, mas o serviço de localização do aparelho parece desligado. Ative a Localização/GPS e tente novamente.':'Não foi possível obter sua posição agora. Confira o GPS e tente novamente.';
+    const msg=result.reason==='denied'?'O Araxá Moto ainda não tem acesso à localização. Toque em “Autorizar localização”.':result.reason==='unavailable'?'A permissão está liberada, mas o GPS do aparelho parece desligado. Ative a Localização e tente novamente.':'Não foi possível obter sua posição agora. Confira o GPS e tente novamente.';
     showGpsGate(msg);
   }
   return false
 }
 function showGpsGate(message){
   let m=document.querySelector('#gpsGate');if(!m){m=document.createElement('div');m.id='gpsGate';m.className='gps-gate';document.body.appendChild(m)}
-  m.innerHTML=`<div class="gps-gate-card"><div class="gps-gate-icon">⌖</div><span class="badge pending">LOCALIZAÇÃO NECESSÁRIA</span><h2>Ative a localização</h2><p>${message}</p><button class="btn wide" id="gpsAuthorize">Autorizar localização</button><button class="btn soft wide" id="gpsRetry" style="margin-top:8px">Já ativei • verificar</button><button class="gps-close" id="gpsClose">Agora não</button><p class="fine">Android: Configurações → Apps → Araxá Moto → Permissões → Localização → Permitir durante o uso. Também deixe a Localização do aparelho ligada.</p></div>`;
+  m.innerHTML=`<div class="gps-gate-card"><div class="gps-gate-icon">⌖</div><span class="badge pending">LOCALIZAÇÃO NECESSÁRIA</span><h2>Permitir localização</h2><p>${message}</p><button class="btn wide" id="gpsAuthorize">Autorizar localização</button><button class="btn soft wide" id="gpsRetry" style="margin-top:8px">Já autorizei • verificar</button><button class="gps-close" id="gpsClose">Agora não</button><p class="fine">Se você marcou “Não permitir” anteriormente, abra Configurações → Apps → Araxá Moto → Permissões → Localização.</p></div>`;
   m.classList.add('show');
-  const attempt=async()=>{if(gpsPermissionRequestInFlight)return;gpsPermissionRequestInFlight=true;const a=m.querySelector('#gpsAuthorize'),r=m.querySelector('#gpsRetry');if(a)a.disabled=true;if(r)r.disabled=true;hideGpsGate();const ok=await ensureLocationAccess({silent:true});gpsPermissionRequestInFlight=false;if(ok){toast('Localização autorizada ✓');document.dispatchEvent(new CustomEvent('araxa:gps-ready'));return}const state=await readGeoPermission();showGpsGate(state==='denied'?'A permissão continua bloqueada. Libere Localização nas configurações do aplicativo e volte aqui.':'Ainda não conseguimos ler sua posição. Confirme que a Localização/GPS do aparelho está ligada e toque em “Já ativei”.')};
-  m.querySelector('#gpsAuthorize').onclick=attempt;m.querySelector('#gpsRetry').onclick=attempt;m.querySelector('#gpsClose').onclick=hideGpsGate
+  m.querySelector('#gpsAuthorize').onclick=async()=>{
+    if(gpsPermissionRequestInFlight)return;gpsPermissionRequestInFlight=true;
+    const a=m.querySelector('#gpsAuthorize'),r=m.querySelector('#gpsRetry');a.disabled=true;r.disabled=true;
+    const result=await probeLocation({requestPermission:true});gpsPermissionRequestInFlight=false;
+    if(result.ok){hideGpsGate();sessionStorage.setItem('am_gps_ok','1');toast('Localização autorizada ✓');document.dispatchEvent(new CustomEvent('araxa:gps-ready',{detail:result.position}));return}
+    a.disabled=false;r.disabled=false;
+    const state=await readGeoPermission();
+    m.querySelector('p').textContent=state==='denied'?'A permissão foi negada. Abra as configurações do Araxá Moto e permita Localização.':'A permissão foi solicitada, mas ainda não recebemos sua posição. Confira se o GPS está ligado.';
+  };
+  m.querySelector('#gpsRetry').onclick=async()=>{if(gpsPermissionRequestInFlight)return;gpsPermissionRequestInFlight=true;const result=await probeLocation();gpsPermissionRequestInFlight=false;if(result.ok){hideGpsGate();toast('Localização disponível ✓');document.dispatchEvent(new CustomEvent('araxa:gps-ready',{detail:result.position}))}else m.querySelector('p').textContent=result.reason==='denied'?'A localização continua sem permissão. Use o botão Autorizar localização ou as configurações do aparelho.':'GPS ainda indisponível. Confirme que a Localização do aparelho está ligada.'};
+  m.querySelector('#gpsClose').onclick=hideGpsGate
 }
-async function requestCurrentLocation(onSuccess){const ok=await ensureLocationAccess();if(!ok)return;const result=await probeLocation();if(result.ok){hideGpsGate();onSuccess(result.position)}else showGpsGate('A permissão está disponível, mas não conseguimos receber sua posição. Confira se a Localização/GPS está ligada.')}
+async function requestCurrentLocation(onSuccess){
+  const result=await probeLocation();
+  if(result.ok){hideGpsGate();return onSuccess(result.position)}
+  showGpsGate(result.reason==='denied'?'Precisamos da sua permissão para usar sua localização.':'Ative a Localização/GPS do aparelho para continuar.');
+  const once=e=>{document.removeEventListener('araxa:gps-ready',once);if(e.detail)onSuccess(e.detail)};
+  document.addEventListener('araxa:gps-ready',once)
+}
 function passengerHome(){route=gps=null;app.innerHTML=`<section class="map-layout"><div id="realMap"></div><div class="floating-top"><span class="pill">Olá, ${me.name.split(' ')[0]}</span><span class="pill">🛡️ Segurança</span></div><div class="ride-sheet"><h2>Para onde?</h2><form id="request"><div class="segmented"><button type="button" class="active" data-type="ride">🏍️ Corrida</button><button type="button" data-type="delivery">📦 Entrega</button></div><input type="hidden" name="type" value="ride"><label>Partida</label><div class="location-input"><input name="origin" required placeholder="Sua localização"><button type="button" id="gps" class="btn soft">⌖</button></div><label>Destino</label><input name="destination" required placeholder="Digite o destino"><button type="button" id="calculate" class="btn wide" style="margin-top:12px">Ver preço</button><div id="routeInfo" class="route-summary hidden"></div><div id="finish" class="hidden"><label>Pagamento</label><select name="payment"><option value="pix">Pix</option><option value="cash">Dinheiro</option></select><button class="btn blue wide" style="margin-top:12px">Confirmar solicitação</button></div></form></div></section>`;initMap();const f=$('#request');document.querySelectorAll('[data-type]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-type]').forEach(x=>x.classList.remove('active'));b.classList.add('active');f.type.value=b.dataset.type});$('#gps').onclick=()=>requestCurrentLocation(p=>{gps={lat:p.coords.latitude,lon:p.coords.longitude};f.origin.value='Minha localização atual';map.setView([gps.lat,gps.lon],16);L.marker([gps.lat,gps.lon]).addTo(map);toast('Localização encontrada')});$('#calculate').onclick=async()=>{if(!f.destination.value||(!f.origin.value&&!gps))return toast('Informe partida e destino');const b=$('#calculate');b.disabled=true;b.textContent='Calculando…';try{const d=await api('/route',{method:'POST',body:JSON.stringify({origin:f.origin.value,destination:f.destination.value,originCoords:gps})});route=d.route;drawRoute(route);$('#routeInfo').innerHTML=`<strong>${money(route.price)}</strong>${route.distanceKm} km • aproximadamente ${route.durationMin} min`;$('#routeInfo').classList.remove('hidden');$('#finish').classList.remove('hidden')}catch(x){toast(x.message)}finally{b.disabled=false;b.textContent='Recalcular'}};f.onsubmit=async e=>{e.preventDefault();if(!route)return toast('Calcule a rota');try{const data={...Object.fromEntries(new FormData(f)),distanceKm:route.distanceKm,durationMin:route.durationMin,routeCoordinates:route.coordinates};await api('/rides',{method:'POST',body:JSON.stringify(data)});toast('Solicitação enviada');rideList('passenger')}catch(x){toast(x.message)}}}
 function initMap(){map=L.map('realMap',{zoomControl:false}).setView([-19.5937,-46.9401],13);L.control.zoom({position:'topright'}).addTo(map);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map)}
 function drawRoute(r){const line=L.polyline(r.coordinates,{color:'#3f70a8',weight:6,opacity:.92}).addTo(map);L.marker([r.from.lat,r.from.lon]).addTo(map);L.marker([r.to.lat,r.to.lon]).addTo(map);map.fitBounds(line.getBounds(),{padding:[35,35]})}
