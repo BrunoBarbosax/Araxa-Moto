@@ -37,7 +37,7 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 function body(req) {
-  return new Promise((resolve,reject)=>{ let raw=''; req.on('data',c=>{raw+=c; if(raw.length>8e6) reject(new Error('too_large'));}); req.on('end',()=>{try{resolve(raw?JSON.parse(raw):{});}catch{reject(new Error('invalid_json'));}}); req.on('error',reject); });
+  return new Promise((resolve,reject)=>{ let raw=''; req.on('data',c=>{raw+=c; if(raw.length>50e6) reject(new Error('too_large'));}); req.on('end',()=>{try{resolve(raw?JSON.parse(raw):{});}catch{reject(new Error('invalid_json'));}}); req.on('error',reject); });
 }
 function auth(req, db) {
   const token = (req.headers.authorization||'').replace(/^Bearer\s+/i,'');
@@ -103,7 +103,7 @@ async function api(req,res,url) {
       if(!String(data.cnhCategory||'').toUpperCase().includes('A'))return json(res,400,{error:'A CNH precisa incluir a categoria A'});
       if(!data.cnhNumber||!data.cnhExpiry||!data.plate||!data.motorcycleModel)return json(res,400,{error:'Preencha CNH e dados da motocicleta'});
       if(!Array.isArray(data.documents)||data.documents.length<3)return json(res,400,{error:'Envie CNH, documento da moto e foto de perfil'});
-      if(data.documents.some(d=>String(d.data||'').length>2200000))return json(res,413,{error:'Cada documento deve ter no máximo 1,5 MB'});
+      if(data.documents.some(d=>String(d.data||'').length>14000000))return json(res,413,{error:'Cada documento deve ter no máximo 10 MB'});
     }
     const salt=crypto.randomBytes(16).toString('hex'); const user={id:id(role),role,name:String(data.name).trim().slice(0,100),phone,passwordSalt:salt,passwordHash:passwordDigest(data.password,salt),token:crypto.randomBytes(24).toString('hex'),createdAt:new Date().toISOString()};
     if(role==='driver')Object.assign(user,{approved:false,reviewStatus:'pending',reviewNote:'',online:false,balance:0,rating:5,dailyFeeDate:null,employmentPreference:data.employmentPreference==='employee'?'employee':'freelancer',employmentType:null,monthlySalary:0,birthDate:data.birthDate,cnhNumber:String(data.cnhNumber).slice(0,30),cnhCategory:String(data.cnhCategory).toUpperCase().slice(0,5),cnhExpiry:data.cnhExpiry,plate:String(data.plate).toUpperCase().slice(0,10),motorcycleModel:String(data.motorcycleModel).slice(0,80),motorcycleYear:String(data.motorcycleYear||'').slice(0,4),motorcycleColor:String(data.motorcycleColor||'').slice(0,30),pixKey:String(data.pixKey||'').slice(0,100),documents:data.documents.map(d=>({kind:String(d.kind).slice(0,30),name:String(d.name).slice(0,100),type:String(d.type).slice(0,60),data:String(d.data)}))});

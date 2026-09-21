@@ -133,3 +133,9 @@ Esta entrega é um MVP funcional. O mapa usa OpenStreetMap, Nominatim e OSRM sem
 - Nova identidade visual, logo e tela de acompanhamento.
 
 > Para rastreamento com o aplicativo minimizado no Android/iOS, será necessária a etapa nativa de localização em segundo plano e as permissões das lojas.
+
+
+## V6.1 — uploads de documentos
+- Limite por documento ampliado para 10 MB (CNH, documento da moto e foto de perfil).
+- Limite do corpo da requisição ampliado para comportar os três documentos em Base64.
+- Validação mantida no navegador e no servidor.
