@@ -1,12 +1,14 @@
 {
   "name": "araxa-moto",
-  "version": "6.5.0",
+  "version": "6.6.0",
   "private": true,
-  "description": "Araxá Moto V6.5 Premium - correção nativa de permissão GPS Android/iOS",
+  "description": "Araxá Moto V6.6 Premium - GPS nativo Android integrado",
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "mobile:prepare": "npx cap sync"
+    "mobile:prepare": "npx cap sync",
+    "android:sync": "npx cap sync android",
+    "android:open": "npx cap open android"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.0",

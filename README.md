@@ -163,3 +163,30 @@ Esta entrega é um MVP funcional. O mapa usa OpenStreetMap, Nominatim e OSRM sem
 - Revalida a permissão ao voltar das configurações.
 - Separa permissão negada de GPS/localização desligada.
 - Evita solicitações simultâneas de permissão.
+
+## V6.6 — correção GPS nativo Android
+
+Esta versão integra o plugin `@capacitor/geolocation` também no projeto Android nativo (Gradle + registro do plugin), além de declarar `ACCESS_COARSE_LOCATION` e `ACCESS_FINE_LOCATION` no `AndroidManifest.xml`.
+
+### IMPORTANTE: é necessário gerar e instalar um APK novo
+Atualizar apenas GitHub/Render não altera as permissões do APK já instalado.
+
+No PC, após baixar/clonar esta versão:
+
+```bash
+npm install
+npx cap sync android
+cd android
+./gradlew clean assembleDebug
+```
+
+No Windows, dentro de `android`, use:
+
+```bat
+gradlew.bat clean assembleDebug
+```
+
+APK de teste esperado em:
+`android/app/build/outputs/apk/debug/app-debug.apk`
+
+Antes de testar, desinstale o Araxá Moto antigo do celular e instale o APK novo. Em seguida, em Configurações > Apps > Araxá Moto > Permissões, a opção Localização deve existir.
