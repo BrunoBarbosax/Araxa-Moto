@@ -1,3 +1,34 @@
+# Araxá Moto V6 Premium
+
+Versão de produção baseada na V5, preservando PostgreSQL e recursos existentes.
+
+## V6
+- interface premium preto e dourado
+- mapa com mototaxistas online
+- rastreamento do motorista aceito
+- canal em tempo real via Server-Sent Events (sem polling para eventos principais)
+- atualização ao vivo da posição do motorista durante corrida
+- ETA e distância aproximada do motorista até o embarque
+- despacho de novas solicitações apenas para motoristas online dentro do raio máximo configurado
+- ordenação de motoristas por proximidade
+- rota e preço via OpenStreetMap/Nominatim + OSRM
+- notificações locais/web quando permitidas
+- validação de coordenadas GPS
+- PostgreSQL em produção e fallback local em desenvolvimento
+- painel administrativo, aprovação de motoristas, taxas, avaliações, planos e suporte preservados
+
+## Produção
+Variáveis: DATABASE_URL, NODE_ENV=production, ADMIN_USERNAME e ADMIN_PASSWORD.
+
+### Observações mobile
+O código web envia GPS continuamente enquanto a WebView está ativa. Rastreamento garantido com app minimizado/tela bloqueada exige serviço nativo de localização em segundo plano e permissões específicas do Android/iOS. Push remoto com app totalmente fechado exige credenciais de um provedor (por exemplo FCM/APNs). Esses segredos não podem ser pré-configurados no pacote sem as contas do projeto.
+
+## Testes
+Execute `npm test`.
+
+## Deploy
+Docker/Render: mantenha o mesmo DATABASE_URL para preservar os dados.
+
 # Araxá Moto V5 — Premium
 
 Redesign completo preto e dourado, preservando backend, PostgreSQL, rastreamento em tempo real e recursos da V4.

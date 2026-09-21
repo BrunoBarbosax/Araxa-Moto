@@ -11,6 +11,10 @@ const PUBLIC = path.join(ROOT, 'public');
 const DB_FILE = process.env.DB_FILE || path.join(ROOT, 'data.json');
 const DAILY_FEE = 6;
 const COMMISSION = 0.08;
+const realtimeClients = new Map();
+function pushRealtime(userId,type,payload={}) { const set=realtimeClients.get(userId); if(!set)return; const msg=`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`; for(const res of [...set]) { try{res.write(msg)}catch{set.delete(res)} } }
+function haversineKm(a,b){if(!a||!b)return null;const R=6371,toRad=x=>x*Math.PI/180,dLat=toRad(Number(b.lat)-Number(a.lat)),dLon=toRad(Number(b.lon)-Number(a.lon)),x=Math.sin(dLat/2)**2+Math.cos(toRad(Number(a.lat)))*Math.cos(toRad(Number(b.lat)))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+function etaFrom(driver,ride){const km=haversineKm(driver?.location,ride?.originPoint);return km==null?null:{distanceKm:Number(km.toFixed(1)),minutes:Math.max(1,Math.round(km/25*60))}}
 
 const seed = () => ({
   users: [
@@ -79,8 +83,9 @@ async function calculateRoute(origin,destination,originCoords) {
 }
 
 async function api(req,res,url) {
-  if(req.method==='GET' && url.pathname==='/api/health') { try { return json(res,200,{service:'araxa-moto',version:'4.0.0',...(await storage.health())}); } catch { return json(res,503,{service:'araxa-moto',ok:false}); } }
+  if(req.method==='GET' && url.pathname==='/api/health') { try { return json(res,200,{service:'araxa-moto',version:'6.0.0',...(await storage.health())}); } catch { return json(res,503,{service:'araxa-moto',ok:false}); } }
   const db=await loadDB();
+  if(req.method==='GET' && url.pathname==='/api/events') { const token=url.searchParams.get('token')||''; const user=db.users.find(u=>u.token===token); if(!user)return json(res,401,{error:'Não autorizado'}); res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.write(`event: ready\ndata: {\"ok\":true}\n\n`);const set=realtimeClients.get(user.id)||new Set();set.add(res);realtimeClients.set(user.id,set);const keep=setInterval(()=>{try{res.write(': ping\n\n')}catch{}},25000);req.on('close',()=>{clearInterval(keep);set.delete(res);if(!set.size)realtimeClients.delete(user.id)});return; }
   if(req.method==='POST' && url.pathname==='/api/admin-login') {
     const data=await body(req);const expectedUser=process.env.ADMIN_USERNAME;const expectedPassword=process.env.ADMIN_PASSWORD;
     if(!expectedUser||!expectedPassword)return json(res,503,{error:'Acesso administrativo ainda não configurado no servidor'});
@@ -141,8 +146,8 @@ async function api(req,res,url) {
     if(!data.origin||!data.destination) return json(res,400,{error:'Informe origem e destino'});
     const quote=calculatePrice(db.settings,{...data,distanceKm:km,durationMin:Number(data.durationMin)||1});
     const scheduledAt=data.scheduledAt?new Date(data.scheduledAt).toISOString():null;
-    const ride={id:id('corrida'),type:data.serviceType==='delivery'?'delivery':'ride',serviceType:quote.serviceType,serviceName:quote.serviceName,passengerId:user.role==='passenger'?user.id:'passenger-demo',passengerName:user.name,forName:String(data.forName||'').slice(0,100),origin:String(data.origin).slice(0,120),destination:String(data.destination).slice(0,120),stops:Array.isArray(data.stops)?data.stops.slice(0,5).map(x=>String(x).slice(0,120)):[],roundTrip:Boolean(data.roundTrip),scheduledAt,distanceKm:km,durationMin:Math.max(1,Math.min(720,Number(data.durationMin)||1)),routeCoordinates:Array.isArray(data.routeCoordinates)?data.routeCoordinates.slice(0,4000):[],notes:String(data.notes||'').slice(0,500),payment:['cash','pix','contract','corporate'].includes(data.payment)?data.payment:'pix',quote,price:quote.total,status:scheduledAt?'scheduled':'searching',driverId:null,driverName:null,code:String(Math.floor(1000+Math.random()*9000)),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),history:[]};
-    db.rides.push(ride);audit(db,user,'ride_created',ride.id,{price:ride.price,serviceType:ride.serviceType});await saveDB(db);return json(res,201,{ride});
+    const ride={id:id('corrida'),type:data.serviceType==='delivery'?'delivery':'ride',serviceType:quote.serviceType,serviceName:quote.serviceName,passengerId:user.role==='passenger'?user.id:'passenger-demo',passengerName:user.name,forName:String(data.forName||'').slice(0,100),origin:String(data.origin).slice(0,120),destination:String(data.destination).slice(0,120),stops:Array.isArray(data.stops)?data.stops.slice(0,5).map(x=>String(x).slice(0,120)):[],roundTrip:Boolean(data.roundTrip),scheduledAt,distanceKm:km,durationMin:Math.max(1,Math.min(720,Number(data.durationMin)||1)),routeCoordinates:Array.isArray(data.routeCoordinates)?data.routeCoordinates.slice(0,4000):[],originPoint:(data.originPoint&&Number.isFinite(Number(data.originPoint.lat))&&Number.isFinite(Number(data.originPoint.lon)))?{lat:Number(data.originPoint.lat),lon:Number(data.originPoint.lon)}:(Array.isArray(data.routeCoordinates)&&data.routeCoordinates[0]?{lat:Number(data.routeCoordinates[0][0]),lon:Number(data.routeCoordinates[0][1])}:null),notes:String(data.notes||'').slice(0,500),payment:['cash','pix','contract','corporate'].includes(data.payment)?data.payment:'pix',quote,price:quote.total,status:scheduledAt?'scheduled':'searching',driverId:null,driverName:null,code:String(Math.floor(1000+Math.random()*9000)),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),history:[]};
+    db.rides.push(ride);audit(db,user,'ride_created',ride.id,{price:ride.price,serviceType:ride.serviceType});await saveDB(db);for(const d of db.users.filter(x=>x.role==='driver'&&x.approved&&x.online)){const km=haversineKm(d.location,ride.originPoint);if(km==null||km<=Number(db.settings.dispatchMaxRadiusKm||10))pushRealtime(d.id,'new-ride',{rideId:ride.id,origin:ride.origin,destination:ride.destination,price:ride.price,distanceKm:km==null?null:Number(km.toFixed(1))})}return json(res,201,{ride});
   }
   const match=url.pathname.match(/^\/api\/rides\/([^/]+)\/(accept|advance|cancel)$/);
   if(req.method==='POST'&&match) {
@@ -153,14 +158,14 @@ async function api(req,res,url) {
       if(!user.online)return json(res,409,{error:'Fique online antes de aceitar'});
       if(ride.status!=='searching')return json(res,409,{error:'Serviço já aceito'});
       ride.driverId=user.id; ride.driverName=user.name; ride.status='accepted';
-      ride.acceptedAt=new Date().toISOString();notify(db,ride.passengerId,'Corrida aceita',`${user.name} está a caminho.`,ride.id);
+      ride.acceptedAt=new Date().toISOString();notify(db,ride.passengerId,'Corrida aceita',`${user.name} está a caminho.`,ride.id);pushRealtime(ride.passengerId,'ride-update',{rideId:ride.id,status:ride.status,driverId:user.id});
     } else if(action==='advance') {
       if(user.role!=='admin'&&ride.driverId!==user.id)return json(res,403,{error:'Sem permissão'});
       const next={accepted:'arriving',arriving:'arrived',arrived:'in_progress',in_progress:'completed'};
       if(!next[ride.status])return json(res,409,{error:'Não é possível avançar este serviço'});
       const data=await body(req);if(ride.status==='arrived'&&user.role!=='admin'&&String(data.code||'')!==String(ride.code))return json(res,409,{error:'Informe o código de segurança do passageiro'});
       ride.status=next[ride.status];
-      ride[`${ride.status}At`]=new Date().toISOString();notify(db,ride.passengerId,'Atualização da corrida',`Status: ${ride.status}.`,ride.id);
+      ride[`${ride.status}At`]=new Date().toISOString();notify(db,ride.passengerId,'Atualização da corrida',`Status: ${ride.status}.`,ride.id);pushRealtime(ride.passengerId,'ride-update',{rideId:ride.id,status:ride.status});
       if(ride.status==='completed') {
         if(['contract','corporate'].includes(ride.payment)&&ride.serviceType==='urban'&&ride.distanceKm<=7){const contract=db.contracts.find(x=>x.userId===ride.passengerId&&x.status==='active'&&x.remainingCredits>0&&new Date(x.endsAt)>new Date());if(contract){contract.remainingCredits--;ride.contractId=contract.id;ride.price=0;ride.quote={...ride.quote,contractCredit:true,total:0};if(contract.remainingCredits===0)notify(db,ride.passengerId,'Créditos encerrados','Seu plano chegou a zero créditos.',ride.id)}}
         const driver=db.users.find(u=>u.id===ride.driverId);
@@ -211,10 +216,10 @@ async function api(req,res,url) {
   if(req.method==='POST'&&url.pathname==='/api/notifications/read'){db.notifications.filter(n=>n.userId===user.id).forEach(n=>n.read=true);await saveDB(db);return json(res,200,{ok:true});}
   const ratingMatch=url.pathname.match(/^\/api\/rides\/([^/]+)\/rating$/);if(req.method==='POST'&&ratingMatch){const ride=db.rides.find(r=>r.id===ratingMatch[1]);if(!ride||![ride.passengerId,ride.driverId].includes(user.id))return json(res,404,{error:'Corrida não encontrada'});if(ride.status!=='completed')return json(res,409,{error:'Avalie após a conclusão'});const data=await body(req);const score=Math.max(1,Math.min(5,Math.round(Number(data.score)||0)));if(db.ratings.some(x=>x.rideId===ride.id&&x.fromUserId===user.id))return json(res,409,{error:'Avaliação já enviada'});const targetId=user.id===ride.passengerId?ride.driverId:ride.passengerId;db.ratings.push({id:id('rating'),rideId:ride.id,fromUserId:user.id,targetId,score,reason:String(data.reason||'').slice(0,240),createdAt:new Date().toISOString()});const target=db.users.find(x=>x.id===targetId);const scores=db.ratings.filter(x=>x.targetId===targetId);if(target)target.rating=Number((scores.reduce((s,x)=>s+x.score,0)/scores.length).toFixed(1));await saveDB(db);return json(res,201,{ok:true});}
   if(req.method==='POST'&&url.pathname==='/api/incidents'){const data=await body(req);const incident={id:id('incident'),userId:user.id,userName:user.name,rideId:String(data.rideId||''),category:String(data.category||'support').slice(0,40),description:String(data.description||'').slice(0,1000),status:'open',createdAt:new Date().toISOString()};db.incidents.push(incident);notify(db,'admin-main','Novo chamado de suporte',`${user.name}: ${incident.category}`,incident.rideId);await saveDB(db);return json(res,201,{incident});}
-  if(req.method==='POST'&&url.pathname==='/api/driver/location'){if(user.role!=='driver')return json(res,403,{error:'Perfil inválido'});const data=await body(req);user.location={lat:Number(data.lat),lon:Number(data.lon),updatedAt:new Date().toISOString()};await saveDB(db);return json(res,200,{ok:true});}
+  if(req.method==='POST'&&url.pathname==='/api/driver/location'){if(user.role!=='driver')return json(res,403,{error:'Perfil inválido'});const data=await body(req);const lat=Number(data.lat),lon=Number(data.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)return json(res,400,{error:'Localização inválida'});user.location={lat,lon,accuracy:Number(data.accuracy)||null,heading:Number(data.heading)||null,speed:Number(data.speed)||null,updatedAt:new Date().toISOString()};await saveDB(db);for(const ride of db.rides.filter(r=>r.driverId===user.id&&!['completed','cancelled'].includes(r.status)))pushRealtime(ride.passengerId,'driver-location',{rideId:ride.id,location:user.location,eta:etaFrom(user,ride)});return json(res,200,{ok:true});}
   if(req.method==='GET'&&url.pathname==='/api/drivers/online') {
     const freshAfter=Date.now()-120000;
-    const drivers=db.users.filter(u=>u.role==='driver'&&u.approved&&u.online&&u.location&&Number.isFinite(Number(u.location.lat))&&Number.isFinite(Number(u.location.lon))&&new Date(u.location.updatedAt).getTime()>freshAfter).map(u=>({id:u.id,name:u.name,rating:u.rating||5,motorcycleModel:u.motorcycleModel||'',motorcycleColor:u.motorcycleColor||'',location:u.location}));
+    const ref=(Number.isFinite(Number(url.searchParams.get('lat')))&&Number.isFinite(Number(url.searchParams.get('lon'))))?{lat:Number(url.searchParams.get('lat')),lon:Number(url.searchParams.get('lon'))}:null; const drivers=db.users.filter(u=>u.role==='driver'&&u.approved&&u.online&&u.location&&Number.isFinite(Number(u.location.lat))&&Number.isFinite(Number(u.location.lon))&&new Date(u.location.updatedAt).getTime()>freshAfter).map(u=>({id:u.id,name:u.name,rating:u.rating||5,motorcycleModel:u.motorcycleModel||'',motorcycleColor:u.motorcycleColor||'',location:u.location,distanceKm:ref?Number(haversineKm(ref,u.location).toFixed(1)):null})).sort((a,b)=>(a.distanceKm??999)-(b.distanceKm??999));
     return json(res,200,{drivers,updatedAt:new Date().toISOString()});
   }
   const trackingMatch=url.pathname.match(/^\/api\/rides\/([^/]+)\/tracking$/);
@@ -224,7 +229,7 @@ async function api(req,res,url) {
     if(user.role!=='admin'&&ride.passengerId!==user.id&&ride.driverId!==user.id)return json(res,403,{error:'Sem permissão'});
     const driver=ride.driverId?db.users.find(u=>u.id===ride.driverId):null;
     const driverPublic=driver?{id:driver.id,name:driver.name,rating:driver.rating||5,plate:driver.plate||'',motorcycleModel:driver.motorcycleModel||'',motorcycleColor:driver.motorcycleColor||'',location:driver.location||null}:null;
-    return json(res,200,{ride,driver:driverPublic,serverTime:new Date().toISOString()});
+    return json(res,200,{ride,driver:driverPublic,eta:driver?etaFrom(driver,ride):null,serverTime:new Date().toISOString()});
   }
   if(req.method==='POST'&&url.pathname==='/api/driver/journey'){if(user.role!=='driver'||user.employmentType!=='employee')return json(res,403,{error:'Jornada disponível para contratado'});const data=await body(req);const active=[...db.journeys].reverse().find(x=>x.driverId===user.id&&x.status!=='ended');if(data.action==='start'){if(active)return json(res,409,{error:'Jornada já iniciada'});db.journeys.push({id:id('journey'),driverId:user.id,driverName:user.name,status:'working',startedAt:new Date().toISOString(),events:[]});}else{if(!active)return json(res,409,{error:'Nenhuma jornada iniciada'});if(data.action==='break')active.status=active.status==='break'?'working':'break';else if(data.action==='end'){active.status='ended';active.endedAt=new Date().toISOString()}else return json(res,400,{error:'Ação inválida'});active.events.push({action:data.action,at:new Date().toISOString()});}await saveDB(db);return json(res,200,{journeys:db.journeys.filter(x=>x.driverId===user.id).slice(-30).reverse()});}
   if(req.method==='GET'&&url.pathname==='/api/contracts'){return json(res,200,{contracts:db.contracts.filter(x=>user.role==='admin'||x.userId===user.id),plans:db.settings.plans});}
@@ -261,7 +266,7 @@ const server=http.createServer(async(req,res)=>{
   } catch(err) { json(res,err.message==='too_large'?413:400,{error:err.message==='invalid_json'?'JSON inválido':'Não foi possível processar'}); }
 });
 if(require.main===module){
-  storage.initStorage({seed,dbFile:DB_FILE}).then(()=>server.listen(PORT,'0.0.0.0',()=>console.log(`Araxá Moto v4 disponível na porta ${PORT}`))).catch(err=>{console.error('[startup]',err);process.exit(1)});
+  storage.initStorage({seed,dbFile:DB_FILE}).then(()=>server.listen(PORT,'0.0.0.0',()=>console.log(`Araxá Moto v6 disponível na porta ${PORT}`))).catch(err=>{console.error('[startup]',err);process.exit(1)});
   for(const signal of ['SIGTERM','SIGINT'])process.on(signal,async()=>{await storage.close();process.exit(0)});
 }
 module.exports={server,seed,estimate,calculateRoute,calculatePrice};
