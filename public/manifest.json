@@ -1,1 +1,17 @@
-{"name":"Araxá Moto","short_name":"Araxá Moto","description":"Corridas de mototáxi e entregas em Araxá","start_url":"/","display":"standalone","background_color":"#f4f7fb","theme_color":"#3f70a8","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
+{
+  "name": "Araxá Moto — Sempre com você",
+  "short_name": "Araxá Moto",
+  "description": "Corridas de mototáxi e entregas em Araxá",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090b0f",
+  "theme_color": "#090b0f",
+  "icons": [
+    {
+      "src": "/icon-v5.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
