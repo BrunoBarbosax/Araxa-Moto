@@ -1,8 +1,8 @@
 {
   "name": "araxa-moto",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
-  "description": "MVP instalável para corridas de mototáxi e entregas em Araxá",
+  "description": "Araxá Moto v3 - mobilidade local com PostgreSQL e painel de produção",
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
@@ -11,8 +11,13 @@
   "dependencies": {
     "@capacitor/android": "^7.4.0",
     "@capacitor/core": "^7.4.0",
-    "@capacitor/ios": "^7.4.0"
+    "@capacitor/ios": "^7.4.0",
+    "pg": "^8.13.1"
   },
-  "devDependencies": { "@capacitor/cli": "^7.4.0" },
-  "engines": { "node": ">=20" }
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }
